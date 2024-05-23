@@ -2,17 +2,17 @@
 
 setup_ipv6() {
     echo "Thiết lập IPv6..."
-   curl -sSL "https://raw.githubusercontent.com/volamtuan/-/main/ipv6" | bash
+   curl -sSL "https://raw.githubusercontent.com/volamtuan/-/main/ipv6" | bash ipv6
 }
 
 install_3proxy_without_pass() {
     echo "Bắt đầu cài đặt 3proxy không có mật khẩu..."
-    curl -sSL "https://raw.githubusercontent.com/fviatool/proxy/main/lan.sh" | bash
+    curl -sSL "https://raw.githubusercontent.com/fviatool/proxy/main/lan.sh" | bash lan.sh
 }
 
 install_3proxy_with_pass() {
     echo "Bắt đầu cài đặt 3proxy có mật khẩu..."
-    curl -sSL "https://raw.githubusercontent.com/volamtuan/-/main/3proxy" | bash
+    curl -sSL "https://raw.githubusercontent.com/volamtuan/-/main/3proxy" | bash 3proxy
 }
 
 # Menu
