@@ -1,4 +1,4 @@
-##!/bin/sh
+#!/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 random() {
@@ -55,28 +55,6 @@ $(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
 EOF
 }
 
-download_proxy() {
-    cd $WORKDIR || exit 1
-    curl -F "proxy.txt" https://transfer.sh
-}
-
-rotate_ipv6() {
-    while true; do
-        echo "Rotating IPv6..."
-        ip -6 addr flush dev eth0
-        sleep 5
-        ip -6 addr add $(gen64 $IP6)/64 dev eth0
-        echo "IPv6 rotated successfully."
-        gen_data >$WORKDIR/data.txt
-        gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-        bash $WORKDIR/boot_ifconfig.sh
-        echo "IPv6 Xoay Rotated successfully."
-        rotate_count=$((rotate_count + 1))
-        echo "Xoay IP Tự Động: $rotate_count"
-        sleep 3600
-    done
-}
-
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
         echo "//$IP4/$port/$(gen64 $IP6)"
@@ -105,6 +83,7 @@ yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
+echo "working folder = /home/cloudfly"
 WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
@@ -114,7 +93,7 @@ IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
 echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
 
-FIRST_PORT=37000
+FIRST_PORT=35000
 LAST_PORT=40000
 
 echo "LAST_PORT is $LAST_PORT. Continue..."
@@ -124,7 +103,7 @@ gen_iptables >$WORKDIR/boot_iptables.sh
 gen_ifconfig >$WORKDIR/boot_ifconfig.sh
 chmod +x boot_*.sh /etc/rc.local
 
-gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+#gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
 cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
@@ -139,6 +118,3 @@ gen_proxy_file_for_user
 rm -rf /root/3proxy-3proxy-0.8.6
 
 echo "Starting Proxy"
-
-rotate_ipv6
-download_proxy
