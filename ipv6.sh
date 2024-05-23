@@ -12,7 +12,7 @@ get_ipv4_address() {
 
 # Function to get IPv6 address
 get_ipv6_address() {
-    IPV6_ADDRESS=$(ip -6 addr show dev "$INTERFACE" | grep "inet6.*global" | awk '{print $2}' | head -n 1)
+    IPV6_ADDRESS=$(ip -6 addr show dev "$INTERFACE" | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
 }
 
 # Function to get gateway IPv6 address
