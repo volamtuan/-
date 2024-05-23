@@ -30,7 +30,7 @@ install_3proxy() {
 gen_3proxy() {
     cat <<EOF
 daemon
-maxconn 2000
+maxconn 4000
 nserver 1.1.1.1
 nserver 8.8.4.4
 nserver 2001:4860:4860::8888
@@ -41,6 +41,11 @@ setgid 65535
 setuid 65535
 stacksize 6291456 
 flush
+
+authcache ip 999999 
+auth iponly
+allow 14.224.163.75
+deny *
 
 $(awk -F "/" '{print "\n" \
 "" $1 "\n" \
