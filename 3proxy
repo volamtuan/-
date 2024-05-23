@@ -2,21 +2,25 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 WORKDIR="/home/proxy"
-MAXCOUNT= 33333
-IFCFG="$IFCFG"
-START_PORT= 30000
+MAXCOUNT=33333
+IFCFG="auto_detect_interface"
+START_PORT=30000
+
+auto_detect_interface() {
+    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+}
 
 # Thông báo bắt đầu quá trình thiết lập IPv6
 echo "Đang Setup IPv6"
 
 # Tải tập lệnh ipv6 từ GitHub và thiết lập quyền thực thi
-wget https://raw.githubusercontent.com/volamtuan/-/main/ipv6 -O /tmp/ipv6
-chmod +x /tmp/ipv6
-bash /tmp/ipv6
-
-auto_detect_interface() {
-    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+setup_ipv6() {
+    wget https://raw.githubusercontent.com/volamtuan/-/main/ipv6 -O /tmp/ipv6
+    chmod +x /tmp/ipv6
+    bash /tmp/ipv6
 }
+
+auto_detect_interface
 
 # Get IPv6 address
 get_ipv6_address() {
@@ -140,7 +144,7 @@ LAST_PORT=33333
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
 gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-chmod +x boot_*.sh /etc/rc.local
+chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
 gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
@@ -176,7 +180,8 @@ while true; do
     echo "1. Xoay IPv6"
     echo "2. Xoay IPv6 Tự Động "
     echo "3. Download Proxy "
-    echo "4. Exit"
+    echo "4. Setup IPv6 "
+    echo "5. Exit"
     echo -n "Nhập lựa chọn của bạn: "
     read choice
     case $choice in
@@ -190,9 +195,13 @@ while true; do
             ;;
         3)
             download_proxy
-            echo "Link Dow Proxy"
+            echo "Link Proxy"
             ;;
         4)
+            setup_ipv6
+            echo "Đang Thiết Lập Lại IPv6"
+            ;;
+        5)
             echo "Exiting..."
             exit 0
             ;;
@@ -201,3 +210,6 @@ while true; do
             ;;
     esac
 done
+```
+
+Đảm bảo rằng bạn đã cài đặt các tập lệnh và công cụ cần thiết trước khi chạy mã này.
