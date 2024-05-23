@@ -83,7 +83,7 @@ yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
-echo "working folder = /home/cloudfly"
+echo "working folder = /home/proxy"
 WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
@@ -96,7 +96,7 @@ echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
 FIRST_PORT=35000
 LAST_PORT=40000
 
-echo "LAST_PORT is $LAST_PORT. Continue..."
+echo "Cổng Proxy $FIRST_PORT is $LAST_PORT. Continue..."
 
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
