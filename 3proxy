@@ -15,9 +15,8 @@ echo "Đang Setup IPv6"
 
 # Tải tập lệnh ipv6 từ GitHub và thiết lập quyền thực thi
 setup_ipv6() {
-    wget https://raw.githubusercontent.com/volamtuan/-/main/ipv6 -O /tmp/ipv6
-    chmod +x /tmp/ipv6
-    bash /tmp/ipv6
+    echo "Thiết lập IPv6..."
+    bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ipv6") 
 }
 
 auto_detect_interface
