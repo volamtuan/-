@@ -117,7 +117,7 @@ monitor_rotation() {
     done
 }
 
-echo "working folder = /home/vlt"
+echo "Thiet Lap Thu Muv + Setup Proxy"
 WORKDIR="/home/vlt"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
