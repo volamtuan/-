@@ -5,6 +5,10 @@ auto_detect_interface() {
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
+# Get IPv6 address
+ipv6_address=$(ip addr show eth0 | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
+
+
 # Function to setup IPv6
 setup_ipv6() {
     # Tên card mạng
