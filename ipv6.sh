@@ -5,7 +5,7 @@ get_interface() {
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
-# Function to get IP address
+# Function to get IPv4 address
 get_ipv4_address() {
     IPV4_ADDRESS=$(ip -4 addr show dev "$INTERFACE" | grep "inet " | awk '{print $2}' | cut -d'/' -f1)
 }
@@ -18,16 +18,6 @@ get_ipv6_address() {
 # Function to get gateway IPv6 address
 get_gateway6_address() {
     GATEWAY6_ADDRESS=$(ip -6 route show default | awk '{print $3}')
-}
-
-# Function to detect operating system
-detect_os() {
-    if [ -f "/etc/os-release" ]; then
-        OS=$(grep ^ID= /etc/os-release | cut -d= -f2)
-    else
-        echo "Không thể xác định hệ điều hành."
-        exit 1
-    fi
 }
 
 # Function to set up IPv6 on CentOS
@@ -103,9 +93,6 @@ ping_google6() {
 
 # Main function
 main() {
-    # Detect operating system
-    detect_os
-
     # Get network interface name
     get_interface
 
@@ -124,12 +111,18 @@ main() {
     echo "Địa chỉ IPv6: $IPV6_ADDRESS"
 
     # Set up IPv6 based on operating system
-    if [ "$OS" == "ubuntu" ]; then
-        setup_ipv6_ubuntu
-    elif [ "$OS" == "centos" ]; then
-        setup_ipv6_centos
+    if [ -f "/etc/os-release" ]; then
+        OS=$(grep ^ID= /etc/os-release | cut -d= -f2)
+        if [ "$OS" == "ubuntu" ]; then
+            setup_ipv6_ubuntu
+        elif [ "$OS" == "centos" ]; then
+            setup_ipv6_centos
+        else
+            echo "Hệ điều hành không được hỗ trợ"
+            exit 1
+        fi
     else
-        echo "Hệ điều hành không được hỗ trợ"
+        echo "Không thể xác định hệ điều hành."
         exit 1
     fi
 
