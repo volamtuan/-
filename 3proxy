@@ -2,7 +2,7 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 WORKDIR="/home/proxy"
-MAXCOUNT=33333
+MAXCOUNT=3333
 START_PORT=30000
 
 # Function to auto-detect network interface name
