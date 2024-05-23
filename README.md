@@ -6,6 +6,7 @@
 bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/install.sh") 
 
 Lấy thông tin tài khoản dùng lệnh
-
+Lấy thông tin tài khoản tại đường dẫn /home/proxy
+hoặc lệnh
 cat /home/proxy/proxy.txt
 
