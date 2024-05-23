@@ -1,21 +1,28 @@
 #!/bin/bash
 
-# Function to automatically detect network interface
-auto_detect_interface() {
+# Function to get IP, IPv6, and network interface name on CentOS
+get_network_info_centos() {
+    # Get network interface name
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+
+    # Get IPv4 address
+    IPV4_ADDRESS=$(ip -4 addr show dev "$INTERFACE" | grep "inet " | awk '{print $2}' | cut -d'/' -f1)
+
+    # Get IPv6 address
+    IPV6_ADDRESS=$(ip -6 addr show dev "$INTERFACE" | grep "inet6.*global" | awk '{print $2}' | head -n 1)
+
+    # Print the results
+    echo "Tên card mạng: $INTERFACE"
+    echo "Địa chỉ IP: $IPV4_ADDRESS"
+    echo "Địa chỉ IPv6: $IPV6_ADDRESS"
 }
 
-# Get IPv6 address
-ipv6_address=$(ip addr show eth0 | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
-
-
-# Function to setup IPv6
+# Function to set up IPv6 on CentOS
 setup_ipv6() {
-    # Tên card mạng
-    INTERFACE="auto_detect_interface"
-    auto_detect_interface
-    
-    # Lấy địa chỉ IPv6 của card mạng
+    # Get network interface name
+    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+
+    # Get IPv6 address
     IPV6_ADDRESS=$(ip -6 addr show dev "$INTERFACE" | grep "inet6.*global" | awk '{print $2}' | head -n 1)
 
     # Kiểm tra xem có địa chỉ IPv6 nào được tìm thấy không
@@ -138,5 +145,7 @@ ping_google6() {
         echo "Ping thất bại đến Google qua IPv6"
     fi
 }
+
+# Gọi hàm để lấy thông tin mạng trên CentOS và thiết lập IPv6
+get_network_info_centos
 setup_ipv6
-ping_google6
