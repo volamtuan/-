@@ -1,29 +1,29 @@
 #!/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
+# Hàm tạo địa chỉ IPv6 ngẫu nhiên
 random() {
-	tr </dev/urandom -dc A-Za-z0-9 | head -c5
-	echo
+    tr </dev/urandom -dc A-Za-z0-9 | head -c5
+    echo
 }
 
 array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+
 gen64() {
-	ip64() {
-		echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
-	}
-	echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
+    ip64() {
+        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+    }
+    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
+
 install_3proxy() {
-    echo "installing 3proxy"
+    echo "Cài đặt 3proxy"
     URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
     wget -qO- $URL | bsdtar -xvf-
     cd 3proxy-3proxy-0.8.6
     make -f Makefile.Linux
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
     cp src/3proxy /usr/local/etc/3proxy/bin/
-    #cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy
-    #chmod +x /etc/init.d/3proxy
-    #chkconfig 3proxy on
     cd $WORKDIR
 }
 
@@ -83,43 +83,48 @@ rotate_ipv6() {
     echo "Xoay IP Tự Động: $rotate_count"
 }
 
+# Thiết lập xoay IPv6 tự động mỗi 10 phút
 while true; do
     rotate_ipv6
     echo "Chờ 10 phút trước khi xoay IPv6 tiếp theo."
     sleep 600  # Rotate IPv6 every 10 minutes
 done
 
-cat << EOF > /etc/rc.d/rc.local
+# Tạo /etc/rc.d/rc.local nếu chưa tồn tại
+if [ ! -f /etc/rc.d/rc.local ]; then
+    cat <<EOF > /etc/rc.d/rc.local
 #!/bin/bash
 touch /var/lock/subsys/local
 EOF
+    chmod +x /etc/rc.d/rc.local
+fi
 
-echo "installing apps"
+echo "Cài đặt các ứng dụng cần thiết"
 yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
-echo "working folder = /home/proxy"
+echo "Thư mục làm việc = /home/proxy"
 WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
-mkdir $WORKDIR && cd $_
+mkdir -p $WORKDIR && cd $WORKDIR
 
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
-echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
+echo "Địa chỉ IP nội bộ = ${IP4}. Phân đoạn ngoại cho IPv6 = ${IP6}"
 
 FIRST_PORT=35000
 LAST_PORT=40000
 
-echo "Cổng Proxy $FIRST_PORT is $LAST_PORT. Continue..."
+echo "Cổng Proxy từ $FIRST_PORT đến $LAST_PORT. Tiếp tục..."
 
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
 gen_ifconfig >$WORKDIR/boot_ifconfig.sh
 chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
-gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+gen_3proxy > /usr/local/etc/3proxy/3proxy.cfg
 
 cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
@@ -133,5 +138,5 @@ bash /etc/rc.local
 gen_proxy_file_for_user
 rm -rf /root/3proxy-3proxy-0.8.6
 
-echo "Starting Proxy"
+echo "Bắt đầu Proxy"
 rotate_ipv6
