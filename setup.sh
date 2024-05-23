@@ -89,9 +89,32 @@ rotate_ipv6() {
     sleep 3600
 }
 
+setup_cron_job() {
+    crontab -l > mycron
+    echo "*/10 * * * * /bin/bash -c '$WORKDIR/rotate_ipv6.sh'" >> mycron
+    crontab mycron
+    rm mycron
+}
+
 download_proxy() {
     cd $WORKDIR || exit 1
     curl -F "proxy.txt" https://transfer.sh
+}
+
+# Function to monitor and alert rotation process
+monitor_rotation() {
+    while true; do
+        # Check if the rotation script is running
+        if pgrep -x "rotate_ipv6.sh" > /dev/null; then
+            # If running, sleep for a while and check again
+            sleep 300 # Sleep for 5 minutes
+        else
+            # If not running, send alert
+            echo "ALERT: IPv6 rotation script is not running!"
+            # You can add more actions here, like sending an email notification
+            break
+        fi
+    done
 }
 
 echo "working folder = /home/vlt"
@@ -130,9 +153,23 @@ gen_proxy_file_for_user
 
 rm -rf /root/3proxy-3proxy-0.8.6
 
+# Create rotate_ipv6 script
+cat >$WORKDIR/rotate_ipv6.sh <<EOF
+#!/bin/sh
+$(declare -f rotate_ipv6)
+rotate_ipv6
+EOF
+chmod +x $WORKDIR/rotate_ipv6.sh
+
+# Setup cron job for rotating IPv6 every 10 minutes
+setup_cron_job
+
 echo "Starting Proxy"
 echo "Current IPv6 Address Count:"
 ip -6 addr | grep inet6 | wc -l
+
+# Start monitoring rotation process
+monitor_rotation &
 
 # Menu loop
 while true; do
