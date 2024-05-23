@@ -111,16 +111,25 @@ ulimit -n 10048
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 EOF
 
-# Auto rotate IPv6
+# Tạo tệp rotate_ipv6.sh
+cat >$WORKDIR/rotate_ipv6.sh <<EOF
+#!/bin/sh
+
+# Xoay IPv6 tự động
 while true; do
-    echo "Rotating IPv6..."
+    echo "Đang xoay IPv6..."
     IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
     gen_data >$WORKDIR/data.txt
     gen_ifconfig >$WORKDIR/boot_ifconfig.sh
     bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 rotated successfully."
+    echo "IPv6 đã được xoay thành công."
     sleep 3600
 done
+EOF
+chmod +x $WORKDIR/rotate_ipv6.sh
+
+# Thiết lập công việc cron để xoay IPv6 mỗi 10 phút
+setup_cron_job
 
 bash /etc/rc.local
 
