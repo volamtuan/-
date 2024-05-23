@@ -73,6 +73,22 @@ $(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
+rotate_ipv6() {
+    echo "Đang Xoay IPv6"
+    gen_data > $WORKDIR/data.txt
+    gen_ifconfig > $WORKDIR/boot_ifconfig.sh
+    bash $WORKDIR/boot_ifconfig.sh
+    echo "IPv6 Đã Xoay Thành Công."
+    rotate_count=$((rotate_count + 1))
+    echo "Xoay IP Tự Động: $rotate_count"
+}
+
+while true; do
+    rotate_ipv6
+    echo "Chờ 10 phút trước khi xoay IPv6 tiếp theo."
+    sleep 600  # Rotate IPv6 every 10 minutes
+done
+
 cat << EOF > /etc/rc.d/rc.local
 #!/bin/bash
 touch /var/lock/subsys/local
@@ -101,9 +117,9 @@ echo "Cổng Proxy $FIRST_PORT is $LAST_PORT. Continue..."
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
 gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-chmod +x boot_*.sh /etc/rc.local
+chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
-#gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
 cat >>/etc/rc.local <<EOF
 bash ${WORKDIR}/boot_iptables.sh
@@ -118,3 +134,4 @@ gen_proxy_file_for_user
 rm -rf /root/3proxy-3proxy-0.8.6
 
 echo "Starting Proxy"
+rotate_ipv6
