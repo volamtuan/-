@@ -1,58 +1,138 @@
 #!/bin/bash
 
-# Hàm kiểm tra và chọn tên giao diện mạng tự động
+# Function to automatically detect network interface
 auto_detect_interface() {
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
-# Kiểm tra và chọn giao diện mạng tự động
-auto_detect_interface
+# Function to setup IPv6
+setup_ipv6() {
+    # Tên card mạng
+    INTERFACE="auto_detect_interface"
+    auto_detect_interface
+    
+    # Lấy địa chỉ IPv6 của card mạng
+    IPV6_ADDRESS=$(ip -6 addr show dev "$INTERFACE" | grep "inet6.*global" | awk '{print $2}' | head -n 1)
 
-# Get IPv6 address
-ipv6_address=$(ip addr show "$INTERFACE" | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
+    # Kiểm tra xem có địa chỉ IPv6 nào được tìm thấy không
+    if [ -z "$IPV6_ADDRESS" ]; then
+        echo "Không tìm thấy địa chỉ IPv6 trên giao diện $INTERFACE"
+        exit 1
+    fi
 
-# Check if IPv6 address is obtained
-if [ -n "$ipv6_address" ]; then
-    echo "IPv6 address obtained: $ipv6_address"
+    # Lấy địa chỉ gateway IPv6 từ routing table
+    GATEWAY6_ADDRESS=$(ip -6 route show default | awk '{print $3}')
 
-    # Declare associative arrays to store IPv6 addresses and gateways
-    declare -A ipv6_addresses=(
-        [4]="2001:ee0:4f9b::$IPD:0000/64"
-        [5]="2001:ee0:4f9b::$IPD:0000/64"
-        [244]="2001:ee0:4f9b::$IPD:0000/64"
-        ["default"]="2001:ee0:4f9b::$IPC::$IPD:0000/64"
-    )
+    # Kiểm tra xem có gateway IPv6 nào được tìm thấy không
+    if [ -z "$GATEWAY6_ADDRESS" ]; then
+        echo "Không tìm thấy gateway IPv6"
+        exit 1
+    fi
 
-    declare -A gateways=(
-        [4]="2001:ee0:4f9b:$IPC::1"
-        [5]="2001:ee0:4f9b:$IPC::1"
-        [244]="2001:ee0:4f9b:$IPC::1"
-        ["default"]="2001:ee0:4f9b:$IPC::1"
-    )
+    # Phát hiện hệ điều hành
+    OS=$(grep ^ID= /etc/os-release | cut -d= -f2)
 
-    # Get IPv4 third and fourth octets
-    IPC=$(echo "$ipv6_address" | cut -d":" -f5)
-    IPD=$(echo "$ipv6_address" | cut -d":" -f6)
+    if [[ "$OS" == "ubuntu" ]]; then
+        # Đường dẫn đến tệp cấu hình Netplan
+        NETPLAN_PATH="/etc/netplan"
 
-    # Set IPv6 address and gateway based on IPv4 third octet
-    IPV6_ADDRESS="${ipv6_addresses[$IPC]}"
-    GATEWAY="${gateways[$IPC]}"
+        # Kiểm tra và cập nhật cấu hình Netplan cho các phiên bản Ubuntu khác nhau
+        if [ -d "$NETPLAN_PATH" ]; then
+            if [ -f "$NETPLAN_PATH/01-netcfg.yaml" ]; then
+                NETPLAN_CONFIG="$NETPLAN_PATH/01-netcfg.yaml"
+            elif [ -f "$NETPLAN_PATH/50-cloud-init.yaml" ]; then
+                NETPLAN_CONFIG="$NETPLAN_PATH/50-cloud-init.yaml"
+            elif [ -f "$NETPLAN_PATH/99-netcfg.yaml" ]; then
+                NETPLAN_CONFIG="$NETPLAN_PATH/99-netcfg.yaml"
+            else
+                echo "Không tìm thấy tệp cấu hình Netplan"
+                exit 1
+            fi
+        else
+            echo "Thư mục $NETPLAN_PATH không tồn tại"
+            exit 1
+        fi
 
-    echo "Configuring interface: $INTERFACE"
+        # Tạo đoạn cấu hình IPv6 mới
+        NEW_NETPLAN_CONFIG=$(cat "$NETPLAN_CONFIG")
+        NEW_NETPLAN_CONFIG+="
+        ethernets:
+            $INTERFACE:
+                dhcp4: no
+                dhcp6: no
+                addresses:
+                    - $IPV6_ADDRESS
+                gateway6: $GATEWAY6_ADDRESS
+                nameservers:
+                    addresses: [2001:4860:4860::8888, 2001:4860:4860::8844]
+    "
 
-    # Configure IPv6 settings
-    echo "IPV6_ADDR_GEN_MODE=stable-privacy" > /etc/network/interfaces
-    echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
-    echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
+        # Ghi đè cấu hình Netplan
+        echo -e "$NEW_NETPLAN_CONFIG" > "$NETPLAN_CONFIG"
 
-    # Restart networking service
-    service networking restart
-    systemctl restart NetworkManager.service
-    service network restart
-    # Hiển thị cấu hình mạng của giao diện
-    ip addr show "$INTERFACE"
+        # Áp dụng cấu hình Netplan
+        netplan apply
+    elif [[ "$OS" == "centos" ]]; then
+        # Đường dẫn đến tệp cấu hình mạng trên CentOS
+        NETWORK_CONFIG_PATH="/etc/sysconfig/network-scripts/ifcfg-$INTERFACE"
 
-    echo "Done!"
-else
-    echo "No IPv6 address obtained."
-fi
+        # Kiểm tra xem tệp cấu hình mạng có tồn tại không
+        if [ ! -f "$NETWORK_CONFIG_PATH" ]; then
+            echo "Không tìm thấy tệp cấu hình mạng cho $INTERFACE"
+            exit 1
+        fi
+
+        # Tạo đoạn cấu hình IPv6 mới
+        NEW_NETWORK_CONFIG=$(cat "$NETWORK_CONFIG_PATH")
+        NEW_NETWORK_CONFIG+="
+        IPV6INIT=yes
+        IPV6ADDR=$IPV6_ADDRESS
+        IPV6_DEFAULTGW=$GATEWAY6_ADDRESS
+    "
+
+        # Ghi đè cấu hình mạng
+        echo -e "$NEW_NETWORK_CONFIG" > "$NETWORK_CONFIG_PATH"
+
+        # Khởi động lại mạng
+
+    else
+        echo "Hệ điều hành không được hỗ trợ"
+        exit 1
+    fi
+
+    # Ping đến địa chỉ IPv6 gateway để kiểm tra kết nối
+    ping6 -c 4 "$GATEWAY6_ADDRESS"
+
+    # Kết quả ping
+    PING_RESULT=$?
+    if [ $PING_RESULT -eq 0 ]; then
+        echo "Ping thành công đến gateway IPv6: $GATEWAY6_ADDRESS"
+    else
+        echo "Ping thất bại đến gateway IPv6: $GATEWAY6_ADDRESS"
+    fi
+
+    systemctl restart network
+    sudo systemctl restart network
+
+
+    ip -6 addr | grep inet6 | wc -l
+
+    # Kiểm tra kết nối IPv6 bằng cách ping Google
+    ping_google6
+}
+
+# Function to ping Google over IPv6
+ping_google6() {
+    # Thực hiện ping Google qua IPv6
+    ping6 -c 4 ipv6.google.com
+
+    # Kiểm tra kết quả ping
+    PING_RESULT=$?
+    if [ $PING_RESULT -eq 0 ]; then
+        echo "Ping thành công đến Google qua IPv6"
+    else
+        echo "Ping thất bại đến Google qua IPv6"
+    fi
+}
+setup_ipv6
+ping_google6
