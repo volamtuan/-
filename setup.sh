@@ -79,13 +79,13 @@ setup_environment() {
 rotate_count=0
 
 rotate_ipv6() {
-    echo "Rotating IPv6 addresses..."
+    echo "Dang Xoay IPv6"
     gen_data >$WORKDIR/data.txt
     gen_ifconfig >$WORKDIR/boot_ifconfig.sh
     bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 addresses rotated successfully."
+    echo "IPv6 Xoay Rotated successfully."
     rotate_count=$((rotate_count + 1))
-    echo "Rotation count: $rotate_count"
+    echo "Xoay IP Tu Dong: $rotate_count"
     sleep 3600
 }
 
@@ -100,10 +100,9 @@ WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
 
 IP4=$(curl -4 -s icanhazip.com)
-# Set the fixed IPv6 address here
-FIXED_IPV6_ADDRESS="2001:0db8:85a3:0000:0000:8a2e:0370:7334"
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
-echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${FIXED_IPV6_ADDRESS}"
+echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
 
 FIRST_PORT=20000
 LAST_PORT=22222
