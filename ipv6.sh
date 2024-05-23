@@ -1,84 +1,59 @@
 #!/bin/bash
 
-# Hàm tự động phát hiện tên giao diện mạng
+## Hàm kiểm tra và chọn tên giao diện mạng tự động
 auto_detect_interface() {
-    INTERFACE=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
+    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
-# Hàm cấu hình IPv6 cho CentOS/RHEL
-configure_ipv6_centos() {
-    echo > /etc/sysctl.conf
-    tee -a /etc/sysctl.conf <<EOF
-net.ipv6.conf.default.disable_ipv6 = 0
-net.ipv6.conf.all.disable_ipv6 = 0
-EOF
-    sysctl -p
+# Get IPv6 address
+ipv6_address=$(ip addr show eth0 | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
 
-    IPC=$(curl -4 -s icanhazip.com | cut -d"." -f3)
-    IPD=$(curl -4 -s icanhazip.com | cut -d"." -f4)
+# Check if IPv6 address is obtained
+if [ -n "$ipv6_address" ]; then
+    echo "IPv6 address obtained: $ipv6_address"
 
-    if [ "$IPC" == "4" ]; then
-        IPV6ADDR="2403:6a40:0:40::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:40::1"
-    elif [ "$IPC" == "5" ]; then
-        IPV6ADDR="2403:6a40:0:41::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:41::1"
-    elif [ "$IPC" == "244" ]; then
-        IPV6ADDR="2403:6a40:2000:244::$IPD:0000/64"
-        IPV6GW="2403:6a40:2000:244::1"
+    # Declare associative arrays to store IPv6 addresses and gateways
+    declare -A ipv6_addresses=(
+        [4]="2001:ee0:4f9b::$IPD:0000/64"
+        [5]="2001:ee0:4f9b::$IPD:0000/64"
+        [244]="2001:ee0:4f9b::$IPD:0000/64"
+        ["default"]="2001:ee0:4f9b::$IPC::$IPD:0000/64"
+    )
+
+    declare -A gateways=(
+        [4]="2001:ee0:4f9b:$IPC::1"
+        [5]="2001:ee0:4f9b:$IPC::1"
+        [244]="2001:ee0:4f9b:$IPC::1"
+        ["default"]="2001:ee0:4f9b:$IPC::1"
+    )
+
+    # Get IPv4 third and fourth octets
+    IPC=$(echo "$ipv6_address" | cut -d":" -f5)
+    IPD=$(echo "$ipv6_address" | cut -d":" -f6)
+
+    # Set IPv6 address and gateway based on IPv4 third octet
+    IPV6_ADDRESS="${ipv6_addresses[$IPC]}"
+    GATEWAY="${gateways[$IPC]}"
+
+    # Check if interface is available
+    INTERFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -v lo | head -n1)
+
+    if [ -n "$INTERFACE" ]; then
+        echo "Configuring interface: $INTERFACE"
+
+        # Configure IPv6 settings
+        echo "IPV6_ADDR_GEN_MODE=stable-privacy" >> /etc/network/interfaces
+        echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
+        echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
+
+        # Restart networking service
+        service networking restart
+        systemctl restart NetworkManager.service
+        ifconfig "$INTERFACE"
+        echo "Done!"
     else
-        IPV6ADDR="2403:6a40:0:$IPC::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:$IPC::1"
+        echo "No network interface available."
     fi
-
-    tee -a /etc/sysconfig/network-scripts/ifcfg-$INTERFACE <<-EOF
-    IPV6INIT=yes
-    IPV6_AUTOCONF=no
-    IPV6_DEFROUTE=yes
-    IPV6_FAILURE_FATAL=no
-    IPV6_ADDR_GEN_MODE=stable-privacy
-    IPV6ADDR=$IPV6ADDR
-    IPV6_DEFAULTGW=$IPV6GW
-    EOF
-
-    service network restart
-}
-
-# Hàm cấu hình IPv6 cho Ubuntu
-configure_ipv6_ubuntu() {
-    IPV4=$(curl -4 -s icanhazip.com)
-    IPC=$(curl -4 -s icanhazip.com | cut -d"." -f3)
-    IPD=$(curl -4 -s icanhazip.com | cut -d"." -f4)
-    INTERFACE=$(ip -o link show | awk -F': ' '$2 != "lo" {print $2; exit}')
-
-    if [ "$IPC" == "4" ]; then
-        IPV6ADDR="2403:6a40:0:40::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:40::1"
-    elif [ "$IPC" == "5" ]; then
-        IPV6ADDR="2403:6a40:0:41::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:41::1"
-    elif [ "$IPC" == "244" ]; then
-        IPV6ADDR="2403:6a40:2000:244::$IPD:0000/64"
-        IPV6GW="2403:6a40:2000:244::1"
-    else
-        IPV6ADDR="2403:6a40:0:$IPC::$IPD:0000/64"
-        IPV6GW="2403:6a40:0:$IPC::1"
-    fi
-
-    netplan_config=$(cat /etc/netplan/50-cloud-init.yaml)
-    new_netplan_config=$(sed "/gateway4:/i \ \ \ \ \ \ \ \ \ \ \ \ - $IPV6ADDR" <<< "$netplan_config")
-    new_netplan_config=$(sed "/gateway4:.*/a \ \ \ \ \ \ \ \ \ \ \ \ gateway6: $IPV6GW" <<< "$new_netplan_config")
-    
-    echo "$new_netplan_config" > /etc/netplan/50-cloud-init.yaml
-    netplan apply
-}
-
-# Kiểm tra và thực hiện cấu hình tương ứng với hệ thống
-if [ "$(which yum)" ]; then
-    auto_detect_interface
-    configure_ipv6_centos
 else
-    configure_ipv6_ubuntu
+    echo "No IPv6 address obtained."
 fi
-
-echo 'Đã tạo và cập nhật IPv6 thành công!'
