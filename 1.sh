@@ -79,6 +79,26 @@ gen_ifconfig() {
 $(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
+rotate_count=0
+
+rotate_ipv6() {
+    echo "Dang Xoay IPv6"
+    gen_data >$WORKDIR/data.txt
+    gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+    bash $WORKDIR/boot_ifconfig.sh
+    echo "IPv6 Xoay Rotated successfully."
+    rotate_count=$((rotate_count + 1))
+    echo "Xoay IP Tu Dong: $rotate_count"
+    sleep 3600
+}
+
+setup_cron_job() {
+    crontab -l > mycron
+    echo "*/10 * * * * /bin/bash -c '$WORKDIR/rotate_ipv6.sh'" >> mycron
+    crontab mycron
+    rm mycron
+}
+
 echo "installing apps"
 yum -y install gcc net-tools bsdtar zip >/dev/null
 
@@ -95,7 +115,7 @@ IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 echo "Internal ip = ${IP4}. External sub for ip6 = ${IP6}"
 
 FIRST_PORT=30000
-LAST_PORT=33333
+LAST_PORT=30333
 
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
@@ -111,24 +131,15 @@ ulimit -n 10048
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 EOF
 
-# Tạo tệp rotate_ipv6.sh
+# Create rotate_ipv6 script
 cat >$WORKDIR/rotate_ipv6.sh <<EOF
 #!/bin/sh
-
-# Xoay IPv6 tự động
-while true; do
-    echo "Đang xoay IPv6..."
-    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-    gen_data >$WORKDIR/data.txt
-    gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-    bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 đã được xoay thành công."
-    sleep 3600
-done
+$(declare -f rotate_ipv6)
+rotate_ipv6
 EOF
 chmod +x $WORKDIR/rotate_ipv6.sh
 
-# Thiết lập công việc cron để xoay IPv6 mỗi 10 phút
+# Setup cron job for rotating IPv6 every 10 minutes
 setup_cron_job
 
 bash /etc/rc.local
