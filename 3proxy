@@ -10,15 +10,6 @@ auto_detect_interface() {
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
-# Thông báo bắt đầu quá trình thiết lập IPv6
-echo "Đang Setup IPv6"
-
-# Tải tập lệnh ipv6 từ GitHub và thiết lập quyền thực thi
-setup_ipv6() {
-    echo "Thiết lập IPv6..."
-    bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ipv6") 
-}
-
 auto_detect_interface
 
 # Get IPv6 address
