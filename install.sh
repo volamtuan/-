@@ -2,7 +2,7 @@
 
 setup_ipv6() {
     echo "Thiết lập IPv6..."
-   curl -sSL "https://raw.githubusercontent.com/fviatool/-/main/ipv6" | bash
+   curl -sSL "https://raw.githubusercontent.com/volamtuan/-/main/ipv6" | bash
 }
 
 install_3proxy_without_pass() {
