@@ -2,14 +2,12 @@
 
 setup_ipv6() {
     echo "Thiết lập IPv6..."
-   bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ipv6") 
+    bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ipv6") 
 }
 
 install_3proxy_without_pass() {
     echo "Bắt đầu cài đặt 3proxy không có mật khẩu..."
     bash <(curl -s "https://raw.githubusercontent.com/fviatool/proxy/main/lan.sh")
-    )
-    
 }
 
 install_3proxy_with_pass() {
