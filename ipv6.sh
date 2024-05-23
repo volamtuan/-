@@ -1,12 +1,15 @@
 #!/bin/bash
 
-## Hàm kiểm tra và chọn tên giao diện mạng tự động
+# Hàm kiểm tra và chọn tên giao diện mạng tự động
 auto_detect_interface() {
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
+# Kiểm tra và chọn giao diện mạng tự động
+auto_detect_interface
+
 # Get IPv6 address
-ipv6_address=$(ip addr show eth0 | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
+ipv6_address=$(ip addr show "$INTERFACE" | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
 
 # Check if IPv6 address is obtained
 if [ -n "$ipv6_address" ]; then
@@ -35,25 +38,21 @@ if [ -n "$ipv6_address" ]; then
     IPV6_ADDRESS="${ipv6_addresses[$IPC]}"
     GATEWAY="${gateways[$IPC]}"
 
-    # Check if interface is available
-    INTERFACE=$(ip -o link show | awk -F': ' '{print $2}' | grep -v lo | head -n1)
+    echo "Configuring interface: $INTERFACE"
 
-    if [ -n "$INTERFACE" ]; then
-        echo "Configuring interface: $INTERFACE"
+    # Configure IPv6 settings
+    echo "IPV6_ADDR_GEN_MODE=stable-privacy" > /etc/network/interfaces
+    echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
+    echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
 
-        # Configure IPv6 settings
-        echo "IPV6_ADDR_GEN_MODE=stable-privacy" >> /etc/network/interfaces
-        echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
-        echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
+    # Restart networking service
+    service networking restart
+    systemctl restart NetworkManager.service
+    service network restart
+    # Hiển thị cấu hình mạng của giao diện
+    ip addr show "$INTERFACE"
 
-        # Restart networking service
-        service networking restart
-        systemctl restart NetworkManager.service
-        ifconfig "$INTERFACE"
-        echo "Done!"
-    else
-        echo "No network interface available."
-    fi
+    echo "Done!"
 else
     echo "No IPv6 address obtained."
 fi
