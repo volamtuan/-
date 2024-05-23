@@ -3,18 +3,16 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 WORKDIR="/home/proxy"
 MAXCOUNT=33333
-IFCFG="auto_detect_interface"
 START_PORT=30000
 
+# Function to auto-detect network interface name
 auto_detect_interface() {
-    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+    INTERFACE=$(ip -o link show | awk -F': ' '$2 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
-
-auto_detect_interface
 
 # Get IPv6 address
 get_ipv6_address() {
-    ipv6_address=$(ip addr show $IFCFG | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
+    ipv6_address=$(ip addr show $INTERFACE | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
     echo "$ipv6_address"
 }
 
@@ -74,7 +72,7 @@ EOF
 }
 
 gen_data() {
-    seq $FIRST_PORT $LAST_PORT | while read port; do
+    seq $START_PORT $((START_PORT + MAXCOUNT - 1)) | while read port; do
         echo "user$port/$(random)/$IP4/$port/$(gen64 $IP6)"
     done
 }
@@ -87,7 +85,7 @@ EOF
 
 gen_ifconfig() {
     cat <<EOF
-$(awk -F "/" '{print "ifconfig $IFCFG inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig $INTERFACE inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
@@ -121,20 +119,19 @@ install_3proxy
 echo "Dang Thiet Lap Thu Muc +. Setup Proxy…"
 WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
-mkdir $WORKDIR && cd $_
+mkdir -p $WORKDIR && cd $WORKDIR
 
+auto_detect_interface
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
 echo "Internal ip = ${IP4}. External sub for ip6 = ${IP6}"
-
-FIRST_PORT=30000
-LAST_PORT=33333
+echo "Detected network interface: $INTERFACE"
 
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
 gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-chmod +x $WORKDIR/boot_*.sh /etc/rc.local
+chmod +x boot_*.sh /etc/rc.local
 
 gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
@@ -170,8 +167,7 @@ while true; do
     echo "1. Xoay IPv6"
     echo "2. Xoay IPv6 Tự Động "
     echo "3. Download Proxy "
-    echo "4. Setup IPv6 "
-    echo "5. Exit"
+    echo "4. Exit"
     echo -n "Nhập lựa chọn của bạn: "
     read choice
     case $choice in
@@ -185,13 +181,9 @@ while true; do
             ;;
         3)
             download_proxy
-            echo "Link Proxy"
+            echo "Link Dow Proxy"
             ;;
         4)
-            setup_ipv6
-            echo "Đang Thiết Lập Lại IPv6"
-            ;;
-        5)
             echo "Exiting..."
             exit 0
             ;;
@@ -200,6 +192,3 @@ while true; do
             ;;
     esac
 done
-```
-
-Đảm bảo rằng bạn đã cài đặt các tập lệnh và công cụ cần thiết trước khi chạy mã này.
