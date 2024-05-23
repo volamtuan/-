@@ -21,14 +21,14 @@ while true; do
     echo "1. Thiết lập IPv6 Cho Máy Ảo"
     echo "2. Cài đặt 3proxy không có mật khẩu"
     echo "3. Cài đặt 3proxy có mật khẩu"
-    echo "4. Thoát"
+    echo "0. Thoát"
 
     read -p "Chọn một tùy chọn: " choice
     case $choice in
         1) setup_ipv6 ;;
         2) install_3proxy_without_pass ;;
         3) install_3proxy_with_pass ;;
-        4) echo "Thoát..."; exit ;;
+        0) echo "Thoát..."; exit ;;
         *) echo "Tùy chọn không hợp lệ. Vui lòng thử lại." ;;
     esac
 done
