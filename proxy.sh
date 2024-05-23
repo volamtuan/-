@@ -25,7 +25,7 @@ install_3proxy() {
     cd $WORKDIR
 }
 download_proxy() {
-cd /home/vpsus
+cd /home/vlt
 curl -F "file=@proxy.txt" https://file.io
 }
 gen_3proxy() {
@@ -80,7 +80,7 @@ echo "installing apps"
 yum -y install gcc net-tools bsdtar zip >/dev/null
 install_3proxy
 echo "working folder = /home/vpsus"
-WORKDIR="/home/vpsus"
+WORKDIR="/home/vlt"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
 IP4=$(curl -4 -s icanhazip.com)
