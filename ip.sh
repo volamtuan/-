@@ -87,8 +87,8 @@ yum -y install gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
-echo "Setting working directory = /home/bkns"
-WORKDIR="/home/bkns"
+echo "Setting working directory = /home/proxy"
+WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir -p $WORKDIR && cd $WORKDIR
 
