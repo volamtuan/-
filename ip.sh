@@ -1,5 +1,71 @@
-#!/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+#!/bin/bash
+
+# Kiểm tra và cài đặt curl trên CentOS 7
+if ! yum list installed curl &>/dev/null; then
+    yum install -y curl
+fi
+
+# Kiểm tra và cài đặt curl trên Ubuntu
+if ! dpkg -s curl &>/dev/null; then
+    apt-get update
+    apt-get install -y curl
+fi
+
+# Cài đặt IPv6 cho CentOS 7
+if [ -f /etc/redhat-release ]; then
+    echo > /etc/sysctl.conf
+    cat <<EOF >> /etc/sysctl.conf
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv6.conf.all.disable_ipv6 = 0
+EOF
+    sysctl -p
+
+    INTERFACE=$(ip route get 8.8.8.8 | awk 'NR==1 {print $5}')
+    IP=$(ip -4 addr show $INTERFACE | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    IPV6_PREFIX="2403:6a40:0:40"
+    IPV6_ADDRESS="$IP::1/64"
+    IPV6_GATEWAY="$IPV6_PREFIX::1"
+
+    cat <<EOF >> /etc/sysconfig/network-scripts/ifcfg-$INTERFACE
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=$IPV6_ADDRESS
+IPV6_DEFAULTGW=$IPV6_GATEWAY
+EOF
+
+    service network restart
+fi
+
+# Cài đặt IPv6 cho Ubuntu
+if [ -f /etc/lsb-release ]; then
+    IPV4=$(curl -4 -s icanhazip.com)
+    INTERFACE=$(ip route get 8.8.8.8 | awk 'NR==1 {print $5}')
+    IPC=$(echo $IPV4 | cut -d"." -f3)
+    IPD=$(echo $IPV4 | cut -d"." -f4)
+
+    if [ "$IPC" = "4" ]; then
+        IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:40::1"
+    elif [ "$IPC" = "5" ]; then
+        IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:41::1"
+    elif [ "$IPC" = "244" ]; then
+        IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+        GATEWAY="2403:6a40:2000:244::1"
+    else
+        IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:$IPC::1"
+    fi
+
+    cat <<EOF >> /etc/netplan/99-netcfg-vmware.yaml
+  - $IPV6_ADDRESS
+  gateway6: $GATEWAY
+EOF
+    netplan apply
+fi
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
@@ -13,7 +79,14 @@ gen64() {
     }
     echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
-
+# Cài đặt proxy
+echo "installing 3proxy"
+URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
+wget -qO- $URL | bsdtar -xvf-
+cd 3proxy-3proxy-0.8.6
+make -f Makefile.Linux
+mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
+cp src/3proxy /usr/local/etc/3proxy/bin/
 install_3proxy() {
     echo "Installing 3proxy"
     URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/3proxy-0.8.6.tar.gz"
