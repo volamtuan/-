@@ -52,7 +52,7 @@ EOF
 
 # Địa chỉ IPv4 mặc định
 IPV4=$(curl -4 -s icanhazip.com)
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+IPV6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
 # Số lượng cổng
 NUM_PORTS=1000
@@ -91,10 +91,10 @@ for ((port = START_PORT; port <= END_PORT; port++)); do
     fi
 
     # Lưu IPv6 đã sử dụng vào tệp lưu trữ phụ
-    echo "$IP6" >> "$IPV6_USED_FILE"
+    echo "$IPV6" >> "$IPV6_USED_FILE"
 
     # In ra thông tin cổng và cặp IPv4/IPv6
-    echo "Cổng: $port - IPv4: $IPV4, IPv6: $IP6"
+    echo "Cổng: $port - IPv4: $IPV4, IPv6: $IPV6"
 
     # Thực hiện các thao tác khác ở đây, chẳng hạn như tạo lệnh proxy cho mỗi cổng
     # Ví dụ:
