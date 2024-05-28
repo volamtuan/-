@@ -134,7 +134,7 @@ download_proxy() {
 # Hàm tạo tệp proxy cho người dùng chỉ với IPv4:port
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$(awk -v start_port="$START_PORT" -v num_ports="$NUM_PORTS" '{for (port=start_port; port<start_port+num_ports; port++) print "'"$IPV4"':" port "}' ${IPV6_FILE})
+$(awk -v start_port="$START_PORT" -v num_ports="$NUM_PORTS" '{for (port=start_port; port<start_port+num_ports; port++) print "'"$IPV4"':" port}' ${IPV6_FILE})
 EOF
 }
 
