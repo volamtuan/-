@@ -133,7 +133,7 @@ download_proxy() {
 # Hàm tạo tệp proxy cho người dùng chỉ với IPv4:port mới
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$IPV4:$NEW_PORT
+$(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
 EOF
 }
 
