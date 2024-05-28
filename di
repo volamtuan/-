@@ -52,6 +52,7 @@ EOF
 
 # Địa chỉ IPv4 mặc định
 IPV4=$(curl -4 -s icanhazip.com)
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
 # Số lượng cổng
 NUM_PORTS=1000
