@@ -49,12 +49,58 @@ deny * * *
 flush
 EOF
 
-    port=$START_PORT
-    while IFS= read -r ipv6 && [ $port -lt $(($START_PORT + $NUM_PORTS)) ]; do
-        echo "proxy -6 -n -a -ocUSE_TCP_FASTOPEN -p$port -i127.0.0.1 -e$ipv6"
-        ((port++))
-    done < "$IPV6_FILE"
+    #!/bin/bash
+
+# Địa chỉ IPv4 mặc định
+IPV4=$(curl -4 -s icanhazip.com)
+
+# Số lượng cổng
+NUM_PORTS=1000
+
+# Tên tệp chứa địa chỉ IPv6
+IPV6_FILE="ipv6.txt"
+# Tệp lưu trữ phụ
+IPV6_USED_FILE="ipv6_used.txt"
+
+# Tạo 1000 cổng từ 10000 đến 10999
+START_PORT=10000
+END_PORT=$((START_PORT + NUM_PORTS - 1))
+
+# Kiểm tra nếu tệp lưu trữ phụ không tồn tại, tạo nó
+if [ ! -e "$IPV6_USED_FILE" ]; then
+    touch "$IPV6_USED_FILE"
+fi
+
+# Hàm để đảo ngược lại các địa chỉ IPv6 đã sử dụng và ghi đè lên tệp IPv6
+rotate_ipv6() {
+    echo "Đảo ngược lại các địa chỉ IPv6 đã sử dụng..."
+    tac "$IPV6_USED_FILE" > "$IPV6_FILE"
+    cp /dev/null "$IPV6_USED_FILE"
 }
+
+# Vòng lặp để tạo cổng và cung cấp IPv6 từ tệp
+for ((port = START_PORT; port <= END_PORT; port++)); do
+    # Đọc IPv6 từ tệp
+    IPV6=$(sed -n "${port}p" $IPV6_FILE)
+
+    # Kiểm tra nếu hết IPv6 trong tệp, đảo ngược lại các địa chỉ IPv6 đã sử dụng và đặt con trỏ về đầu tệp
+    if [ -z "$IPV6" ]; then
+        echo "Hết địa chỉ IPv6 trong tệp. Đảo ngược lại các địa chỉ IPv6 đã sử dụng và đặt con trỏ về đầu tệp."
+        rotate_ipv6
+        IPV6=$(sed -n "${port}p" $IPV6_FILE)
+    fi
+
+    # Lưu IPv6 đã sử dụng vào tệp lưu trữ phụ
+    echo "$IPV6" >> "$IPV6_USED_FILE"
+
+    # In ra thông tin cổng và cặp IPv4/IPv6
+    echo "Cổng: $port - IPv4: $IPV4, IPv6: $IPV6"
+
+    # Thực hiện các thao tác khác ở đây, chẳng hạn như tạo lệnh proxy cho mỗi cổng
+    # Ví dụ:
+    # proxy_command="proxy -6 -n -a -ocUSE_TCP_FASTOPEN -p$port -i$IPV4 -e$IPV6"
+    # $proxy_command
+done
 
 # Hàm tạo địa chỉ IPv6
 gen_ipv6() {
@@ -88,7 +134,7 @@ download_proxy() {
 # Hàm tạo tệp proxy cho người dùng
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$(awk -v start_port="$START_PORT" -v num_ports="$NUM_PORTS" '{for (port=start_port; port<start_port+num_ports; port++) print "127.0.0.1:" port ":" $1}' ${IPV6_FILE})
+$(awk -v start_port="$START_PORT" -v num_ports="$NUM_PORTS" '{for (port=start_port; port<start_port+num_ports; port++) print "'"$IPV4"':" port "}' ${IPV6_FILE})
 EOF
 }
 
