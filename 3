@@ -131,9 +131,10 @@ download_proxy() {
     curl -F "proxy=@proxy.txt" https://transfer.sh
 }
 
+# Hàm tạo tệp proxy cho người dùng chỉ với IPv4:port mới
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$(awk -v start_port="$START_PORT" -v num_ports="$NUM_PORTS" '{for (port=start_port; port<start_port+num_ports; port++) print "'"$IPV4"':" port ":" $1}' ${IPV6_FILE})
+$IPV4:$NEW_PORT
 EOF
 }
 
