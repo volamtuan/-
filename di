@@ -84,7 +84,7 @@ for ((port = START_PORT; port <= END_PORT; port++)); do
     IPV6=$(sed -n "${port}p" $IPV6_FILE)
 
     # Kiểm tra nếu hết IPv6 trong tệp, đảo ngược lại các địa chỉ IPv6 đã sử dụng và đặt con trỏ về đầu tệp
-    if [ -z "$IPV6" ]; then
+    if [ -z "$IP6" ]; then
         echo "Hết địa chỉ IPv6 trong tệp. Đảo ngược lại các địa chỉ IPv6 đã sử dụng và đặt con trỏ về đầu tệp."
         rotate_ipv6
         IPV6=$(sed -n "${port}p" $IPV6_FILE)
@@ -94,7 +94,7 @@ for ((port = START_PORT; port <= END_PORT; port++)); do
     echo "$IPV6" >> "$IPV6_USED_FILE"
 
     # In ra thông tin cổng và cặp IPv4/IPv6
-    echo "Cổng: $port - IPv4: $IPV4, IPv6: $IPV6"
+    echo "Cổng: $port - IPv4: $IPV4, IPv6: $IP6"
 
     # Thực hiện các thao tác khác ở đây, chẳng hạn như tạo lệnh proxy cho mỗi cổng
     # Ví dụ:
