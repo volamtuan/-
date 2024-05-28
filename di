@@ -91,7 +91,7 @@ for ((port = START_PORT; port <= END_PORT; port++)); do
     fi
 
     # Lưu IPv6 đã sử dụng vào tệp lưu trữ phụ
-    echo "$IPV6" >> "$IPV6_USED_FILE"
+    echo "$IP6" >> "$IPV6_USED_FILE"
 
     # In ra thông tin cổng và cặp IPv4/IPv6
     echo "Cổng: $port - IPv4: $IPV4, IPv6: $IP6"
