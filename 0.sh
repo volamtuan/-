@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ "$(id -u)" != '0' ];n then
+if [ "$(id -u)" != '0' ]; then
     echo 'Error: this script can only be executed by root'
     exit 1
 fi
@@ -124,6 +124,21 @@ echo ====================================
 
 systemctl stop firewalld
 systemctl disable firewalld
+
+gen_ip() {
+    IP=$(curl -4 -s icanhazip.com)
+    FIRST_PORT=10001
+    LAST_PORT="$MAXCOUNT"
+    OUTPUT_FILE="/root/3proxy/proxy.txt"
+
+    for port in $(seq "$FIRST_PORT" "$LAST_PORT"); do
+        echo "$IP:$port" >> "$OUTPUT_FILE"
+    done
+
+    echo "Tạo Proxy $OUTPUT_FILE"
+}
+
+gen_ip
 
 check_all_ipv6_live() {
     ip -6 addr | grep inet6 | while read -r line; do
