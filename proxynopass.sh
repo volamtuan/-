@@ -131,8 +131,6 @@ download_proxy() {
     cd $WORKDIR || return
     curl -F "file=@proxy.txt" https://file.io
 }
-echo "installing apps"
-yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 cat << EOF > /etc/rc.d/rc.local
 #!/bin/bash
@@ -174,8 +172,9 @@ ulimit -n 20048
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 EOF
 
-chmod +x /etc/rc.local
-
+chmod 0755 /etc/rc.local
+sudo systemctl start rc-local
+sudo systemctl enable rc-local
 bash /etc/rc.local
 
 gen_proxy_file_for_user
@@ -183,6 +182,6 @@ rm -rf /root/3proxy-0.9.3
 rm -rf proxynopass.sh
 echo "Starting Proxy"
 
-download_proxy
 Tong Proxy Hien Tai:
 ip -6 addr | grep inet6 | wc -l
+download_proxy
