@@ -156,14 +156,14 @@ EOF
     gen_iptables >$WORKDIR/boot_iptables.sh
     gen_ifconfig >$WORKDIR/boot_ifconfig.sh
 
-    gen_3proxy >/root/3proxy/3proxy.cfg
+    gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
     start_3proxy() {
-    /root/3proxy/bin/3proxy /root/3proxy/3proxy.cfg
+    /usr/local/etc/3proxy /usr/local/etc/3proxy/3proxy.cfg
 } 
 
 start_3proxy
 
-echo pidfile /root/3proxy/3proxy.pid
+echo pidfile /usr/local/etc/3proxy/3proxy.pid
 
 echo daemon
 echo maxconn 3333
