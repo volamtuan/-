@@ -135,6 +135,14 @@ download_proxy() {
 echo "installing apps"
 yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
+cat << EOF > /etc/rc.d/rc.local
+#!/bin/bash
+touch /var/lock/subsys/local
+EOF
+
+echo "installing apps"
+yum -y install wget gcc net-tools bsdtar zip >/dev/null
+
 install_3proxy
 
 echo "working folder = /home/proxy"
