@@ -49,7 +49,7 @@ if [ -n "$ipv6_address" ]; then
 
         # Hiển thị thông tin giao diện mạng
         ifconfig "$INTERFACE"
-        echo "Done!"
+        echo "Done Tao IPV6 !"
     else
         echo "No network interface available."
     fi
