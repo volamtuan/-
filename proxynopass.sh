@@ -168,12 +168,14 @@ ulimit -n 20048
 EOF
 
 chmod +x /etc/rc.local
+
 bash /etc/rc.local
 
 gen_proxy_file_for_user
 rm -rf /root/3proxy-3proxy-0.8.6
-
+rm -rf proxynopass.sh
 echo "Starting Proxy"
+
 download_proxy
 Tong Proxy Hien Tai:
 ip -6 addr | grep inet6 | wc -l
