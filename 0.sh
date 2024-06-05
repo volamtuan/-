@@ -120,8 +120,8 @@ echo ====================================
 echo      Stop Firewall: OK!
 echo ====================================
 
-systemctl stop firewalld
-systemctl disable firewalld
+#systemctl stop firewalld
+#systemctl disable firewalld
 
 gen_ip() {
     IP=$(curl -4 -s icanhazip.com)
