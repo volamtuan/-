@@ -73,7 +73,7 @@ EOF
 
 gen_data() {
     seq $START_PORT $((START_PORT + MAXCOUNT - 1)) | while read port; do
-        echo "user$port/$(random)/$IP4/$port/$(gen64 $IP6)"
+        echo "proxy$port/$(random)/$IP4/$port/$(gen64 $IP6)"
     done
 }
 
