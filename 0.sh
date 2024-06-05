@@ -1,8 +1,4 @@
 #!/bin/bash
-# Made by
-# Copyright
-# Version: 1.0
-# PLEASE ONLY USE THIS FOR CENTOS 7.X
 
 if [ "$(id -u)" != '0' ]; then
     echo 'Error: this script can only be executed by root'
@@ -18,13 +14,14 @@ fi
 
 echo "Địa chỉ IPv4 của bạn: $IP4"
 
+# Lấy địa chỉ IP6 từ hệ thống và cắt chỉ giữ lại phần prefix
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 if [ -z "$IP6" ]; then
     echo 'Error: could not retrieve IP6 address'
     exit 1
 fi
 
-echo "Địa chỉ IPv4 của bạn: $IP6"
+echo "Địa chỉ IPv6 của bạn: $IP6"
 DEFAULT_PREFIX="${IP6}"
 read -r -p "Nhập IPv6 của bạn (mặc định: $DEFAULT_PREFIX): " vPrefix
 vPrefix=${vPrefix:-$DEFAULT_PREFIX}  # Sử dụng giá trị mặc định nếu không nhập
