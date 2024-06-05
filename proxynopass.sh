@@ -111,13 +111,13 @@ EOF
 
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
-        echo "/$IP4/$port/$(gen64 $IP6)"
+        echo "//$IP4/$port/$(gen64 $IP6)"
     done
 }
 
 gen_iptables() {
     cat <<EOF
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA})
 EOF
 }
 
@@ -137,8 +137,8 @@ yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
-echo "working folder = /home/cloudfly"
-WORKDIR="/home/cloudfly"
+echo "working folder = /home/proxy"
+WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
 
