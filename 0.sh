@@ -1,142 +1,129 @@
-#!/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-# Hàm tạo địa chỉ IPv6 ngẫu nhiên
-random() {
-    tr </dev/urandom -dc A-Za-z0-9 | head -c5
-    echo
-}
-
-array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
-
-gen64() {
-    ip64() {
-        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
-    }
-    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
-}
-
-install_3proxy() {
-    echo "Cài đặt 3proxy"
-    URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
-    wget -qO- $URL | bsdtar -xvf-
-    cd 3proxy-3proxy-0.8.6
-    make -f Makefile.Linux
-    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
-    cp src/3proxy /usr/local/etc/3proxy/bin/
-    cd $WORKDIR
-}
-
-gen_3proxy() {
-    cat <<EOF
-daemon
-maxconn 2000
-nserver 1.1.1.1
-nserver 8.8.4.4
-nserver 2001:4860:4860::8888
-nserver 2001:4860:4860::8844
-nscache 65536
-timeouts 1 5 30 60 180 1800 15 60
-setgid 65535
-setuid 65535
-stacksize 6291456 
-flush
-
-$(awk -F "/" '{print "\n" \
-"" $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\n" \
-"flush\n"}' ${WORKDATA})
-EOF
-}
-
-gen_proxy_file_for_user() {
-    cat >proxy.txt <<EOF
-$(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
-EOF
-}
-
-gen_data() {
-    seq $FIRST_PORT $LAST_PORT | while read port; do
-        echo "//$IP4/$port/$(gen64 $IP6)"
-    done
-}
-
-gen_iptables() {
-    cat <<EOF
-    $(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
-EOF
-}
-
-gen_ifconfig() {
-    cat <<EOF
-$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
-EOF
-}
-
-rotate_ipv6() {
-    echo "Đang Xoay IPv6"
-    gen_data > $WORKDIR/data.txt
-    gen_ifconfig > $WORKDIR/boot_ifconfig.sh
-    bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 Đã Xoay Thành Công."
-    rotate_count=$((rotate_count + 1))
-    echo "Xoay IP Tự Động: $rotate_count"
-}
-
-# Thiết lập xoay IPv6 tự động mỗi 10 phút
-while true; do
-    rotate_ipv6
-    echo "Chờ 10 phút trước khi xoay IPv6 tiếp theo."
-    sleep 600  # Rotate IPv6 every 10 minutes
-done
-
-# Tạo /etc/rc.d/rc.local nếu chưa tồn tại
-if [ ! -f /etc/rc.d/rc.local ]; then
-    cat <<EOF > /etc/rc.d/rc.local
 #!/bin/bash
-touch /var/lock/subsys/local
-EOF
-    chmod +x /etc/rc.d/rc.local
+# Made by
+# Copyright
+# Version: 1.0
+# PLEASE ONLY USE THIS FOR CENTOS 7.X
+
+if [ "$(id -u)" != '0' ]; then
+    echo 'Error: this script can only be executed by root'
+    exit 1
 fi
 
-echo "Cài đặt các ứng dụng cần thiết"
-yum -y install wget gcc net-tools bsdtar zip >/dev/null
-
-install_3proxy
-
-echo "Thư mục làm việc = /home/proxy"
-WORKDIR="/home/proxy"
-WORKDATA="${WORKDIR}/data.txt"
-mkdir -p $WORKDIR && cd $WORKDIR
-
+# Lấy địa chỉ IP4 từ hệ thống
 IP4=$(curl -4 -s icanhazip.com)
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+if [ -z "$IP4" ]; then
+    echo 'Error: could not retrieve IPv4 address'
+    exit 1
+fi
 
-echo "Địa chỉ IP nội bộ = ${IP4}. Phân đoạn ngoại cho IPv6 = ${IP6}"
+echo "Địa chỉ IPv4 của bạn: $IP4"
 
-FIRST_PORT=35000
-LAST_PORT=40000
+# Yêu cầu người dùng nhập các thông tin cần thiết với giá trị mặc định cho IPv6 prefix
+DEFAULT_PREFIX="2607:f8b0:4001:c2f"
+read -r -p "Nhập IPv6 của bạn (mặc định: $DEFAULT_PREFIX): " vPrefix
+vPrefix=${vPrefix:-$DEFAULT_PREFIX}  # Sử dụng giá trị mặc định nếu không nhập
 
-echo "Cổng Proxy từ $FIRST_PORT đến $LAST_PORT. Tiếp tục..."
+read -r -p "Số lượng Proxy: " vCount
+read -r -p "IP có quyền truy cập vào Proxy này: " vIp2
 
-gen_data >$WORKDIR/data.txt
-gen_iptables >$WORKDIR/boot_iptables.sh
-gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-chmod +x $WORKDIR/boot_*.sh /etc/rc.local
+# Kiểm tra các giá trị đầu vào
+if [ -z "$vCount" ] || [ -z "$vIp2" ]; then
+    echo 'Error: bạn phải nhập tất cả các thông tin cần thiết'
+    exit 1
+fi
 
-gen_3proxy > /usr/local/etc/3proxy/3proxy.cfg
+# Cài đặt các gói cần thiết
+yum -y groupinstall "Development Tools"
+yum -y install gcc zlib-devel openssl-devel readline-devel ncurses-devel wget tar dnsmasq net-tools iptables-services nano
 
-cat >>/etc/rc.local <<EOF
-bash ${WORKDIR}/boot_iptables.sh
-bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -n 10048
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
-EOF
+# Tải về và biên dịch 3proxy
+git clone https://github.com/z3APA3A/3proxy.git
+cd 3proxy
+make -f Makefile.Linux
+ulimit -u unlimited -n 999999 -s 16384
 
-bash /etc/rc.local
+# Tải các tập tin cấu hình
+wget https://github.com/avcvv/ipv6proxies/raw/master/3proxycfg.sh
+wget https://github.com/avcvv/ipv6proxies/raw/master/Genips.sh
+chmod 0755 Genips.sh
+chmod 0755 3proxycfg.sh
 
-gen_proxy_file_for_user
-rm -rf /root/3proxy-3proxy-0.8.6
+# Cập nhật tập tin cấu hình 3proxy
+sed -i "s/1.4.8.8/$vIp2/g" /root/3proxy/3proxycfg.sh
+sed -i "s/i127.0.0.1/i$IP4/g" /root/3proxy/3proxycfg.sh
 
-echo "Bắt đầu Proxy"
-rotate_ipv6
+# Mở rộng giới hạn file
+echo '* hard nofile 999999' >> /etc/security/limits.conf
+echo '* soft nofile 999999' >> /etc/security/limits.conf
+
+echo $vPrefix > v_prefix.txt
+echo $vCount > v_count.txt
+
+echo ====================================
+echo      Stop 3proxy:  OK!
+echo ====================================
+
+kill -9 $(pidof 3proxy) 2>/dev/null
+
+echo ====================================
+echo  Remove old ip.list
+echo ====================================
+
+rm -rf ip.list
+
+echo ====================================
+echo      Generate IPs: OK!
+echo ====================================
+
+network=$vPrefix
+MAXCOUNT=$vCount
+
+array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+count=1
+
+rnd_ip_block () {
+    a=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
+    b=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
+    c=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
+    d=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
+    echo $network:$a:$b:$c:$d >> ip.list
+}
+
+while [ "$count" -le $MAXCOUNT ]; do
+    rnd_ip_block
+    count=$((count + 1))
+done
+
+echo ====================================
+echo      Restarting Network: OK!
+echo ====================================
+
+service network restart
+
+echo ====================================
+echo      Adding IPs to interface: OK!
+echo ====================================
+
+for i in $(cat ip.list); do
+    echo "ifconfig eth0 inet6 add $i/64"
+    ifconfig eth0 inet6 add $i/64
+done
+
+echo ====================================
+echo      Generate 3proxy.cfg: OK!
+echo ====================================
+
+/root/3proxy/3proxycfg.sh > /root/3proxy/3proxy.cfg
+
+echo ====================================
+echo      Start 3proxy: OK!
+echo ====================================
+
+/root/3proxy/bin/3proxy /root/3proxy/3proxy.cfg
+
+echo ====================================
+echo      Stop Firewall: OK!
+echo ====================================
+
+systemctl stop firewalld
+systemctl disable firewalld
