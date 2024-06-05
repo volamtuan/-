@@ -41,8 +41,6 @@ ulimit -u unlimited -n 999999 -s 16384
 
 # Tải các tập tin cấu hình
 wget https://raw.githubusercontent.com/volamtuan/-/main/3proxycfg.sh
-wget https://github.com/avcvv/ipv6proxies/raw/master/Genips.sh
-chmod 0755 Genips.sh
 chmod 0755 3proxycfg.sh
 
 # Cập nhật tập tin cấu hình 3proxy
