@@ -131,7 +131,6 @@ download_proxy() {
     cd $WORKDIR || return
     curl -F "file=@proxy.txt" https://file.io
 }
-
 echo "installing apps"
 yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
@@ -145,7 +144,7 @@ yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
 install_3proxy
 
-echo "working folder = /home/proxy"
+echo "Dang Thiet Lap Thu Muc"
 WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
