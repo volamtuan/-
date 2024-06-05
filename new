@@ -11,7 +11,6 @@ echo -e    "\e[1;226;42m Thiết lập và cấu hình lại mạng\e[0m"
 echo ====================================
 echo
 service network restart
-rm -rf /root/proxy/
 ulimit -u unlimited -n 999999 -s 16384
 systemctl stop firewalld
 
