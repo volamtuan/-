@@ -17,8 +17,14 @@ if [ -z "$IP4" ]; then
 fi
 
 echo "Địa chỉ IPv4 của bạn: $IP4"
+
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-# Yêu cầu người dùng nhập các thông tin cần thiết với giá trị mặc định cho IPv6 prefix
+if [ -z "$IP6" ]; then
+    echo 'Error: could not retrieve IP6 address'
+    exit 1
+fi
+
+echo "Địa chỉ IPv4 của bạn: $IP6"
 DEFAULT_PREFIX="${IP6}"
 read -r -p "Nhập IPv6 của bạn (mặc định: $DEFAULT_PREFIX): " vPrefix
 vPrefix=${vPrefix:-$DEFAULT_PREFIX}  # Sử dụng giá trị mặc định nếu không nhập
