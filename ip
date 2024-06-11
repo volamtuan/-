@@ -55,7 +55,7 @@ NETMASK=255.255.255.0
 GATEWAY=192.168.1.1
 DNS1=8.8.8.8
 IPV6ADDR=$IP6/64
-IPV6_DEFAULTGW=YOUR_IPV6_GATEWAY
+IPV6_DEFAULTGW=$IP6::1
 EOF
         service network restart
     # Ubuntu configuration using Netplan
