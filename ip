@@ -1,25 +1,25 @@
 #!/bin/bash
 
-# Kiểm tra kết nối mạng
-echo "Kiểm tra kết nối mạng..."
-ping -c 1 8.8.8.8 >/dev/null 2>&1
-if [ $? -ne 0 ]; then
-    echo "Không có kết nối mạng. Vui lòng kiểm tra lại kết nối và thử lại sau."
+# Cài đặt các gói cần thiết
+echo "Installing necessary packages..."
+if [ -f /etc/redhat-release ]; then
+    yum -y install gcc net-tools bsdtar zip make curl wget nano >/dev/null 2>&1
+    yum -y groupinstall "Development Tools"
+    yum -y install gcc zlib-devel openssl-devel readline-devel ncurses-devel wget tar dnsmasq net-tools iptables-services nano >/dev/null 2>&1
+elif [ -f /etc/debian_version ]; then
+    apt-get update >/dev/null 2>&1
+    apt-get install -y gcc net-tools bsdtar zip make curl wget nano >/dev/null 2>&1
+else
+    echo "Unsupported OS"
     exit 1
 fi
+echo "Package installation complete."
 
 # Lấy tên của card mạng
 interface=$(ip link show | awk -F': ' '/^[0-9]+:/ {print $2}')
 
 # Hiển thị tên của card mạng
 echo "Tên của card mạng là: $interface"
-
-# Kiểm tra trạng thái giao diện mạng
-echo "Kiểm tra trạng thái giao diện mạng $interface..."
-if ! ip link show "$interface" >/dev/null 2>&1; then
-    echo "Giao diện mạng $interface không hoạt động."
-    exit 1
-fi
 
 # Lấy địa chỉ IPv6
 echo "Lấy địa chỉ IPv6 cho giao diện mạng $interface..."
@@ -32,6 +32,27 @@ fi
 # Kiểm tra nếu không lấy được địa chỉ IPv6
 if [ -z "$IP6" ]; then
     echo "Không thể lấy được địa chỉ IPv6 cho giao diện mạng $interface. Vui lòng kiểm tra kết nối mạng và thử lại sau."
+    exit 1
+fi
+
+# Lấy địa chỉ IPv4
+IP4=$(curl -4 -s icanhazip.com)
+if [ -z "$IP4" ]; then
+    echo "Không thể lấy được địa chỉ IPv4. Vui lòng kiểm tra kết nối mạng và thử lại sau."
+    exit 1
+fi
+
+# Lấy gateway IPv4
+IPV4_GATEWAY=$(ip route | grep default | awk '{print $3}')
+if [ -z "$IPV4_GATEWAY" ]; then
+    echo "Không thể lấy được gateway IPv4. Vui lòng kiểm tra kết nối mạng và thử lại sau."
+    exit 1
+fi
+
+# Lấy gateway IPv6
+IPV6_GATEWAY=$(ip -6 route | grep default | awk '{print $3}')
+if [ -z "$IPV6_GATEWAY" ]; then
+    echo "Không thể lấy được gateway IPv6. Vui lòng kiểm tra kết nối mạng và thử lại sau."
     exit 1
 fi
 
@@ -52,10 +73,10 @@ IPV6_FAILURE_FATAL=no
 IPV6_ADDR_GEN_MODE=eui64
 IPADDR=$IP4
 NETMASK=255.255.255.0
-GATEWAY=192.168.1.1
+GATEWAY=$IPV4_GATEWAY
 DNS1=8.8.8.8
 IPV6ADDR=$IP6/64
-IPV6_DEFAULTGW=$IP6::1
+IPV6_DEFAULTGW=$IPV6_GATEWAY
 EOF
         service network restart
     # Ubuntu configuration using Netplan
@@ -69,12 +90,8 @@ network:
       addresses:
         - $IP4/24
         - $IP6/64
-      gateway4: 192.168.1.1
-      nameservers:
-        addresses:
-          - 8.8.8.8
-          - 2001:4860:4860::8888
-      gateway6: 2001:db8:85a3::1
+      gateway4: $IPV4_GATEWAY
+      gateway6: $IPV6_GATEWAY
       nameservers:
         addresses:
           - 8.8.8.8
