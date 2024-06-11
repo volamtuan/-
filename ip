@@ -1,19 +1,6 @@
 #!/bin/bash
 
-# Installing necessary packages
-echo "Installing necessary packages..."
-if [ -f /etc/redhat-release ]; then
-    yum -y install gcc net-tools bsdtar zip make curl wget nano >/dev/null 2>&1
-elif [ -f /etc/debian_version ]; then
-    apt-get update
-    apt-get install gcc net-tools bsdtar zip make curl wget nano -y >/dev/null 2>&1
-else
-    echo "Unsupported OS"
-    exit 1
-fi
-echo "Package installation complete."
-
-# Checking for internet connection
+# Kiểm tra kết nối mạng
 echo "Kiểm tra kết nối mạng..."
 ping -c 1 8.8.8.8 >/dev/null 2>&1
 if [ $? -ne 0 ]; then
@@ -21,9 +8,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Detecting network interface
+# Lấy tên của card mạng
 interface=$(ip link show | awk -F': ' '/^[0-9]+:/ {print $2}')
+
+# Hiển thị tên của card mạng
 echo "Tên của card mạng là: $interface"
+
+# Kiểm tra trạng thái giao diện mạng
 echo "Kiểm tra trạng thái giao diện mạng $interface..."
 if ! ip link show "$interface" >/dev/null 2>&1; then
     echo "Giao diện mạng $interface không hoạt động."
@@ -64,7 +55,7 @@ NETMASK=255.255.255.0
 GATEWAY=192.168.1.1
 DNS1=8.8.8.8
 IPV6ADDR=$IP6/64
-IPV6_DEFAULTGW=$IP6::1
+IPV6_DEFAULTGW=YOUR_IPV6_GATEWAY
 EOF
         service network restart
     # Ubuntu configuration using Netplan
@@ -79,7 +70,11 @@ network:
         - $IP4/24
         - $IP6/64
       gateway4: 192.168.1.1
-      gateway6: $IP6::1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 2001:4860:4860::8888
+      gateway6: 2001:db8:85a3::1
       nameservers:
         addresses:
           - 8.8.8.8
@@ -94,10 +89,5 @@ EOF
     echo "IPv6 configured as $IP6 for network interface $interface"
 }
 
-# Checking IPv6 connectivity
-echo "Kiểm tra kết nối IPv6..."
-ping6 -c 4 www.google.com
-
-# Configuring IPv6
+# Execute function to configure IPv6
 configure_ipv6
-echo "Hoàn tất"
