@@ -88,7 +88,6 @@ download_proxy() {
     curl -F "proxy.txt" https://transfer.sh
 }
 
-# Function to monitor and alert rotation process
 echo "Thiet Lap Thu Muc + Setup Proxy"
 WORKDIR="/home/vlt"
 WORKDATA="${WORKDIR}/data.txt"
@@ -215,6 +214,3 @@ echo 'IPv6 setup complete.'
 echo "Starting Proxy"
 echo "Current IPv6 Address Count:"
 ip -6 addr | grep inet6 | wc -l
-
-# Start monitoring rotation process
-monitor_rotation &
