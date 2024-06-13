@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 random() {
@@ -49,7 +49,7 @@ EOF
 
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
+$(awk -F "/" '{print $3 ":" $4 " }' ${WORKDATA})
 EOF
 }
 
@@ -76,19 +76,6 @@ setup_environment() {
     yum -y install gcc net-tools bsdtar zip make >/dev/null
 }
 
-rotate_count=0
-
-rotate_ipv6() {
-    echo "Dang Xoay IPv6"
-    gen_data >$WORKDIR/data.txt
-    gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-    bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 Xoay Rotated successfully."
-    rotate_count=$((rotate_count + 1))
-    echo "Xoay IP Tu Dong: $rotate_count"
-    sleep 3600
-}
-
 setup_cron_job() {
     crontab -l > mycron
     echo "*/10 * * * * /bin/bash -c '$WORKDIR/rotate_ipv6.sh'" >> mycron
@@ -102,33 +89,19 @@ download_proxy() {
 }
 
 # Function to monitor and alert rotation process
-monitor_rotation() {
-    while true; do
-        # Check if the rotation script is running
-        if pgrep -x "rotate_ipv6.sh" > /dev/null; then
-            # If running, sleep for a while and check again
-            sleep 300 # Sleep for 5 minutes
-        else
-            # If not running, send alert
-            echo "ALERT: IPv6 rotation script is not running!"
-            # You can add more actions here, like sending an email notification
-            break
-        fi
-    done
-}
-
-echo "Thiet Lap Thu Muv + Setup Proxy"
+echo "Thiet Lap Thu Muc + Setup Proxy"
 WORKDIR="/home/vlt"
 WORKDATA="${WORKDIR}/data.txt"
-mkdir $WORKDIR && cd $_
+mkdir -p $WORKDIR && cd $WORKDIR
 
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
-echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
+echo "Internal ip = ${IP4}. External sub for ip6 = ${IP6}"
 
 FIRST_PORT=20000
 LAST_PORT=22222
+MAXCOUNT=$((LAST_PORT - FIRST_PORT + 1))
 
 setup_environment
 install_3proxy
@@ -155,46 +128,93 @@ rm -rf /root/3proxy-3proxy-0.8.6
 
 # Create rotate_ipv6 script
 cat >$WORKDIR/rotate_ipv6.sh <<EOF
-#!/bin/sh
-$(declare -f rotate_ipv6)
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Function to generate random IPv6 addresses
+gen_ipv6_64() {
+    rm -f "$WORKDIR/data.txt"  # Backup File
+    count_ipv6=1
+    while [ "\$count_ipv6" -le "$MAXCOUNT" ]; do
+        array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+        ip64() {
+            echo "\${array[\$RANDOM % 16]}\${array[\$RANDOM % 16]}\${array[\$RANDOM % 16]}\${array[\$RANDOM % 16]}"
+        }
+        echo "$IP6:\$(ip64):\$(ip64):\$(ip64):\$(ip64)" >> "$WORKDIR/data.txt"
+        ((count_ipv6 += 1))
+    done
+}
+
+# Function to generate 3proxy configuration
+gen_3proxy_cfg() {
+    echo 'daemon'
+    echo 'maxconn 3000'
+    echo 'nserver 1.1.1.1'
+    echo 'nserver [2001:4860:4860::8888]'
+    echo 'nserver [2001:4860:4860::8844]'
+    echo 'nserver [2001:4860:4860::1111]'
+    echo 'nscache 65536'
+    echo 'timeouts 1 5 30 60 180 1800 15 60'
+    echo 'setgid 65535'
+    echo 'setuid 65535'
+    echo 'stacksize 6291456'
+    echo 'flush'
+    echo 'auth none'
+
+    port="$START_PORT"
+    while read -r ip; do
+        echo "proxy -6 -n -a -p\$port -i$IP4 -e\$ip"
+        ((port += 1))
+    done < "$WORKDIR/data.txt"
+}
+
+# Function to generate ifconfig commands for IPv6
+gen_ifconfig() {
+    while read -r line; do
+        echo "ifconfig $IFCFG inet6 add \$line/64"
+    done < "$WORKDIR/data.txt"
+}
+
+# Function to rotate IPv6 addresses
+rotate_ipv6() {
+    echo "Dang Xoay IPv6"
+    gen_ipv6_64
+    gen_ifconfig >"$WORKDIR/boot_ifconfig.sh"
+    bash "$WORKDIR/boot_ifconfig.sh"
+    gen_3proxy_cfg > /usr/local/etc/3proxy/3proxy.cfg
+    killall 3proxy
+    /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+    echo "IPv6 Xoay Rotated successfully."
+    rotate_count=$((rotate_count + 1))
+    echo "Xoay IP Tu Dong: \$rotate_count"
+    sleep 3600
+}
+
+# Main script starts here
+if [ "\$(id -u)" -ne 0 ]; then
+    echo 'Error: This script must be run as root'
+    exit 1
+fi
+
+# Set variables
+WORKDIR="/home/vlt"
+START_PORT=20000
+MAXCOUNT=22222
+IFCFG="eth0"
+
+# Rotate IPv6 addresses
 rotate_ipv6
 EOF
+
 chmod +x $WORKDIR/rotate_ipv6.sh
 
-# Setup cron job for rotating IPv6 every 10 minutes
+# Set up cron job
 setup_cron_job
 
+echo 'IPv6 setup complete.'
 echo "Starting Proxy"
 echo "Current IPv6 Address Count:"
 ip -6 addr | grep inet6 | wc -l
 
 # Start monitoring rotation process
 monitor_rotation &
-
-# Menu loop
-while true; do
-    echo "1. Reset 3proxy Setup"
-    echo "2. Rotate IPv6"
-    echo "3. Download proxy"
-    echo "4. Exit"
-    echo -n "Enter your choice: "
-    read choice
-    case $choice in
-        1)
-            install_3proxy
-            ;;
-        2)
-            rotate_ipv6
-            ;;
-        3)
-            download_proxy
-            ;;
-        4)
-            echo "Exiting..."
-            exit 0
-            ;;
-        *)
-            echo "Invalid choice. Please try again."
-            ;;
-    esac
-done
