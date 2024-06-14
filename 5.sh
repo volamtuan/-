@@ -140,7 +140,7 @@ bash /etc/rc.local
 # Xóa thư mục tạm của 3proxy
 echo "Đang xóa thư mục tạm của 3proxy..."
 rm -rf /root/3proxy-3proxy-0.8.6
-
+rm -rf 5.sh
 # Sinh file proxy cho người dùng
 echo "Đang sinh file proxy cho người dùng..."
 gen_proxy_file_for_user
