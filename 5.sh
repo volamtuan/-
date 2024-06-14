@@ -1,39 +1,38 @@
-#!/bin/sh
+#!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 random() {
-	tr </dev/urandom -dc A-Za-z0-9 | head -c12
-	echo
+    tr </dev/urandom -dc A-Za-z0-9 | head -c5
+    echo
 }
 
 array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+
+# Hàm sinh IPv6 ngẫu nhiên
 gen64() {
-	ip64() {
-		echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
-	}
-	echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
+    ip64() {
+        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+    }
+    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
+
+# Cài đặt 3proxy
 install_3proxy() {
-    echo "installing 3proxy"
-    URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
-    wget -qO- $URL | bsdtar -xvf-
-    cd 3proxy-3proxy-0.8.6
+    echo "Đang cài đặt 3proxy..."
+    URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.3.tar.gz"
+    wget -qO- $URL | tar -xz
+    cd 3proxy-0.9.3
     make -f Makefile.Linux
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
     cp src/3proxy /usr/local/etc/3proxy/bin/
-    #cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy
-    #chmod +x /etc/init.d/3proxy
-    #chkconfig 3proxy on
     cd $WORKDIR
 }
-download_proxy() {
-cd /home/cloudfly
-curl -F "file=@proxy.txt" https://file.io
-}
+
+# Sinh cấu hình 3proxy
 gen_3proxy() {
     cat <<EOF
 daemon
-maxconn 2000
+maxconn 5000
 nserver 1.1.1.1
 nserver 8.8.4.4
 nserver 2001:4860:4860::8888
@@ -42,85 +41,85 @@ nscache 65536
 timeouts 1 5 30 60 180 1800 15 60
 setgid 65535
 setuid 65535
-stacksize 6291456 
+stacksize 6291456
 flush
-auth strong
+auth iponly
+allow 14.224.163.75
+allow 127.0.0.1
+deny *
 
-users $(awk -F "/" 'BEGIN{ORS="";} {print $1 ":CL:" $2 " "}' ${WORKDATA})
-
-$(awk -F "/" '{print "auth strong\n" \
-"allow " $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\n" \
+$(awk -F "/" '{print "\n" \
+"allow *" $1 "\n" \
+"proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" \
 "flush\n"}' ${WORKDATA})
 EOF
 }
 
+# Sinh file proxy cho người dùng
 gen_proxy_file_for_user() {
-    cat >proxy.txt <<EOF
-$(awk -F "/" '{print $3 ":" $4 ":" $1 ":" $2 }' ${WORKDATA})
-EOF
+    awk -F "/" '{print $3 ":" $4}' ${WORKDATA} > proxy.txt
 }
 
-gen_data() {
-    seq $FIRST_PORT $LAST_PORT | while read port; do
-        echo "user$port/$(random)/$IP4/$port/$(gen64 $IP6)"
-    done
-}
-
-gen_iptables() {
-    cat <<EOF
-    $(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
-EOF
-}
-
+# Định nghĩa hàm gen_ifconfig để sinh lệnh ifconfig
 gen_ifconfig() {
-    cat <<EOF
-$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
-EOF
+    awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA}
 }
-echo "installing apps"
+
+# Cài đặt các gói cần thiết
+echo "Đang cài đặt các ứng dụng cần thiết..."
 yum -y install wget gcc net-tools bsdtar zip >/dev/null
 
-cat << EOF > /etc/rc.d/rc.local
-#!/bin/bash
-touch /var/lock/subsys/local
-EOF
-
-echo "installing apps"
-yum -y install wget gcc net-tools bsdtar zip >/dev/null
-
+# Cài đặt 3proxy
 install_3proxy
 
-echo "working folder = /home/cloudfly"
-WORKDIR="/home/cloudfly"
+# Thiết lập biến làm việc
+WORKDIR="/home/vlt"
 WORKDATA="${WORKDIR}/data.txt"
-mkdir $WORKDIR && cd $_
+mkdir -p $WORKDIR && cd $_
 
+# Lấy địa chỉ IPv4 và IPv6
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
-echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
+echo "Địa chỉ IP nội bộ = ${IP4}. Địa chỉ IP6 ngoài mạng = ${IP6}"
 
-FIRST_PORT=20000
-LAST_PORT=20222
+# Thiết lập cổng proxy và số lượng proxy
+FIRST_PORT=11111
+LAST_PORT=14444
 
-gen_data >$WORKDIR/data.txt
-gen_iptables >$WORKDIR/boot_iptables.sh
-gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+echo "Cổng proxy đầu tiên: $FIRST_PORT"
+echo "Số lượng proxy được tạo: $(($LAST_PORT - $FIRST_PORT + 1))"
+
+# Sinh dữ liệu và cấu hình
+echo "Đang sinh dữ liệu..."
+gen_data > $WORKDIR/data.txt
+echo "Đang sinh lệnh ifconfig..."
+gen_ifconfig > $WORKDIR/boot_ifconfig.sh
 chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
-gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+# Sinh cấu hình 3proxy
+echo "Đang sinh cấu hình 3proxy..."
+gen_3proxy > /usr/local/etc/3proxy/3proxy.cfg
 
-cat >>/etc/rc.local <<EOF
-bash ${WORKDIR}/boot_iptables.sh
+# Thêm vào tệp rc.local để thiết lập khởi động
+cat >> /etc/rc.local <<EOF
 bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -n 1000048
+ulimit -n 10048
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 EOF
-chmod 0755 /etc/rc.local
+
+chmod +x /etc/rc.local
 bash /etc/rc.local
 
+# Xóa thư mục tạm của 3proxy
+echo "Đang xóa thư mục tạm của 3proxy..."
+rm -rf /root/3proxy-0.9.3
+
+# Sinh file proxy cho người dùng
+echo "Đang sinh file proxy cho người dùng..."
 gen_proxy_file_for_user
 
-echo "Starting Proxy"
-download_proxy
+echo "Khởi động Proxy..."
+
+echo "Tổng số IPv6 hiện tại:"
+ip -6 addr | grep inet6 | wc -l
