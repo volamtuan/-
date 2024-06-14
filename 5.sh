@@ -128,10 +128,14 @@ chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
 # Sinh cấu hình 3proxy
 echo "Đang sinh cấu hình 3proxy..."
-gen_3proxy > /usr/local/etc/3proxy/3proxy.cfg
+gen_data >$WORKDIR/data.txt
+gen_iptables >$WORKDIR/boot_iptables.sh
+gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+chmod +x $WORKDIR/boot_*.sh /etc/rc.local
+gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
-# Thêm vào tệp rc.local để thiết lập khởi động
-cat >> /etc/rc.local <<EOF
+cat >>/etc/rc.local <<EOF
+bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 10048
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
