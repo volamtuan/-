@@ -91,11 +91,14 @@ gen_ifconfig() {
     awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA}
 }
 
-# Cài đặt các gói cần thiết
-echo "Đang cài đặt các ứng dụng cần thiết..."
-yum -y install wget gcc net-tools bsdtar zip >/dev/null
+cat << EOF > /etc/rc.d/rc.local
+#!/bin/bash
+touch /var/lock/subsys/local
+EOF
 
-# Cài đặt 3proxy
+echo "Đang cài đặt các ứng dụng cần thiết..."
+yum -y install wget gcc net-tools bsdtar zip >/dev/null 2>&1
+
 install_3proxy
 
 # Thiết lập biến làm việc
