@@ -1,6 +1,16 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
+setup_ipv6() {
+    echo "Thiết lập IPv6..."
+    sudo service 3proxy stop
+    ip -6 addr flush dev eth0
+    sudo systemctl stop firewalld
+    sudo systemctl disable firewalld
+    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh") 
+}
+setup_ipv6
+
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
     echo
