@@ -1,136 +1,134 @@
 #!/bin/bash
-###Script Proxy
 
-# Final vars
-WORKDIR="/home/proxy"
-LOGFILE="/home/proxy/proxy.log"
+# Script tạo proxy IPv6 không yêu cầu mật khẩu
+
+WORKDIR="/home/proxy/"
+LOGFILE="${WORKDIR}/ipv6.log"
 
 cat << "EOF"
 ==========================================================================
-        IPv6 All In One VPS Server
+        IPv6 All Cloud VPS Server
 ==========================================================================
-
 EOF
 
-echo -e "Đang cài đặt thư viện và khởi tạo....."
+echo "Installing necessary packages and initializing..."
 
-# Function to get network card
-getNetworkCard() {
-  network_card=$(ip -o link show | awk '{print $2,$9}' | grep ens | cut -d: -f1)
-  if [[ -z "$network_card" ]]; then
-    network_card=$(ip -o link show | awk '{print $2,$9}' | grep enp | cut -d: -f1)
-  fi
-  if [[ -z "$network_card" ]]; then
-    network_card=$(ip -o link show | awk '{print $2,$9}' | grep eno | cut -d: -f1)
-  fi
-  if [[ -z "$network_card" ]]; then
-    network_card="eth0"
-  fi
-}
-
-# Function to get OS info
-getOSInfo() {
-  if [[ -f /etc/os-release ]]; then
+if [[ -f /etc/os-release ]]; then
     . /etc/os-release
     OS=$NAME
     VER=$VERSION_ID
-  elif type lsb_release >/dev/null 2>&1; then
+elif type lsb_release >/dev/null 2>&1; then
     OS=$(lsb_release -si)
     VER=$(lsb_release -sr)
-  elif [[ -f /etc/lsb-release ]]; then
-    . /etc/lsb-release
-    OS=$DISTRIB_ID
-    VER=$DISTRIB_RELEASE
-  elif [[ -f /etc/debian_version ]]; then
-    OS=Debian
+elif [[ -f /etc/debian_version ]]; then
+    OS="Debian"
     VER=$(cat /etc/debian_version)
-  elif [[ -f /etc/SuSe-release ]]; then
-    OS=$(cat /etc/SuSe-release | head -n 1)
-  elif [[ -f /etc/redhat-release ]]; then
-    OS=$(cat /etc/redhat-release)
-  else
+elif [[ -f /etc/redhat-release ]]; then
+    OS=$(cat /etc/redhat-release | cut -d' ' -f1)
+    VER=$(cat /etc/redhat-release | cut -d' ' -f4)
+else
     OS=$(uname -s)
     VER=$(uname -r)
-  fi
-}
+fi
 
-getNetworkCard
-getOSInfo
+if [[ "$OS" = "Ubuntu" || "$OS" = "Debian" ]]; then
+    apt-get update
+    apt-get install -y subnetcalc psmisc > /dev/null
+elif [[ "$OS" = "CentOS" || "$OS" = "Red Hat Enterprise Linux Server" ]]; then
+    yum install -y epel-release
+    yum install -y subnetcalc psmisc > /dev/null
+fi
 
-# Function to update IPv6 settings
-updateIPv6Settings() {
-  if [[ "$OS" = "CentOS Linux" ]]; then
-    echo "CentOS Linux detected."
-    # Modify this function according to CentOS IPv6 settings update
-    # Example:
-    # if grep -q IPV6ADDR_SECONDARIES "/etc/sysconfig/network-scripts/ifcfg-${network_card}"; then
-    #   # Update IPv6 settings here
-    # else
-    #   # Configure IPv6 settings here
-    # fi
-  else
-    echo "Unsupported OS."
-  fi
-}
-
-# Function to create IPv6 proxy
-createIPv6Proxy() {
-  echo -n "Nhập số lượng proxy IPv6 cần tạo: "
-  read proxyCount
-  echo ""
-
-  if [[ "$proxyCount" =~ ^[0-9]+$ ]]; then
-    for ((i=1; i<=$proxyCount; i++)); do
-      randomPort=$(( ( RANDOM % 40000 )  + 10000 ))
-      ipv6Proxy="[${ipv6}]:${randomPort}"
-      echo "$ipv6Proxy" >> "$WORKDIR/proxy_ipv6.txt"
-      echo "Proxy IPv6 $i: $ipv6Proxy"
+generateRandomIPv6() {
+    prefix=$1
+    ipv6mask=$2
+    noOfRandomHextet=$(( (128-${ipv6mask}) / 16))
+    randomHextet() {
+        echo -n "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+    }
+    echo -n "$1"
+    for (( i=0; i<${noOfRandomHextet}; i++ )); do
+        echo -n ":$(randomHextet)"
     done
-    echo "Đã tạo thành công $proxyCount proxy IPv6."
-  else
-    echo "Số lượng proxy không hợp lệ!"
-  fi
 }
 
-# Main menu
-echo "Menu chính:"
-echo ""
-echo "1 - Tự động cập nhật địa chỉ IPv6 mới"
-echo "2 - Hiển thị IPv6 hiện tại"
-echo "3 - Tạo proxy IPv6"
-echo "0 - Thoát"
-echo ""
-echo -n "Nhập lựa chọn của bạn: "
-read selection
-echo ""
-
-# Process the selection
-case $selection in
-  1)
-    echo "Đang lấy IPv6 mới..."
-    # Replace this with your method to retrieve IPv6 address
-    # Example: wget -q -O "$WORKDATA" "$UPDATE_URL" && source "$WORKDATA"
-    # Ensure you set $ipv6 and $ipv6mask with retrieved values
-    if [[ -z "$ipv6" ]]; then
-      echo "Không thể lấy được địa chỉ IPv6 mới!"
-    else
-      echo "Đã lấy được địa chỉ IPv6 mới: $ipv6/$ipv6mask"
-      updateIPv6Settings
-      systemctl restart network
-      echo "IPv6 đã được cập nhật thành công!"
+setIPv6() {
+    ipv6=$1
+    ipv6mask=$2
+    if [[ "$OS" = "Ubuntu" || "$OS" = "Debian" ]]; then
+        if grep -q "iface $network_card inet6 static" /etc/network/interfaces; then
+            sed -i "/iface $network_card inet6 static/d" /etc/network/interfaces
+        fi
+        echo "iface $network_card inet6 static" >> /etc/network/interfaces
+        echo "address $ipv6/$ipv6mask" >> /etc/network/interfaces
+        service networking restart
+    elif [[ "$OS" = "CentOS" || "$OS" = "Red Hat Enterprise Linux Server" ]]; then
+        nmcli connection modify "$network_card" ipv6.method manual ipv6.address "$ipv6/$ipv6mask"
+        nmcli connection up "$network_card"
     fi
-    ;;
-  2)
-    ipv6addr=$(ip addr show eth0 | grep 'pinet6 ' | awk '{print $2}' | cut -f1-4 -d':' | grep '^2')
-    echo "IPv6 hiện tại của bạn là: $ipv6addr"
-    ;;
-  3)
-    createIPv6Proxy
-    ;;
-  0)
-    echo "Kết thúc!"
-    ;;
-  *)
-    echo "Xin hãy chọn lựa chính xác!"
-    ;;
-esac
+}
+
+getPrefix() {
+    ipv6=$1
+    ipv6mask=$2
+    if [[ $ipv6 && $ipv6mask && $ipv6mask -ge 0 && $ipv6mask -lt 128 ]]; then
+        noOfPrefixHextet=$(( $ipv6mask / 16 ))
+        for (( i=1; i<=${noOfPrefixHextet}; i++ )); do
+            hextet=$(echo $ipv6 | cut -d : -f "$i")
+            if [[ $hextet ]]; then
+                echo -n "$hextet:"
+            else
+                echo -n "0000:"
+            fi
+        done
+    fi
+}
+
+createProxyIPv6() {
+    read -p "Nhập số lượng proxy IPv6 cần tạo: " totalProxy
+    if [[ ! $totalProxy =~ ^[1-9][0-9]*$ ]]; then
+        echo "Số lượng không hợp lệ. Vui lòng nhập số nguyên dương."
+        return 1
+    fi
+
+    ipv61=$1
+    ipv6range=$2
+    ipv6gw=$3
+    ipv6sub=$(cut -d / -f 2 <<<$ipv61)
+
+    prefix=$(getPrefix $ipv6gw $ipv6sub)
+
+    array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+
+    generateData() {
+        currentIPv4=$2
+        prefix=$3
+        ipv6mask=$4
+        for (( i=1; i<=${totalProxy}; i++ )); do
+            randomIPv6=$(generateRandomIPv6 $prefix $ipv6mask)
+            setIPv6 $randomIPv6 $ipv6mask
+            echo "Proxy IPv6 $i: $randomIPv6"
+        done
+    }
+
+    echo "Creating $totalProxy IPv6 proxies without password authentication..."
+    generateData 10 192.168.1.100 $prefix $ipv6sub
+
+    echo "Proxy IPv6 đã được tạo mà không yêu cầu mật khẩu."
+}
+
+# Menu selection
+PS3='Chọn một tác vụ để thực hiện: '
+options=("Tạo proxy IPv6 không yêu cầu mật khẩu" "Thoát")
+select opt in "${options[@]}"
+do
+    case $opt in
+        "Tạo proxy IPv6 không yêu cầu mật khẩu")
+            createProxyIPv6
+            ;;
+        "Thoát")
+            break
+            ;;
+        *) echo "Lựa chọn không hợp lệ";;
+    esac
+done
