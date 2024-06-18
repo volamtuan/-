@@ -110,51 +110,72 @@ createIPv6Proxy() {
   done
 }
 
-# Main menu
-echo "Menu chính:"
-echo ""
-echo "1 - Tự động cập nhật địa chỉ IPv6 mới"
-echo "2 - Hiển thị IPv6 hiện tại"
-echo "3 - Tạo proxy IPv6"
-echo "0 - Thoát"
-echo ""
-echo -n "Nhập lựa chọn của bạn: "
-read selection
-echo ""
+# Function to display main menu
+mainMenu() {
+  while true; do
+    clear
+    cat << "EOF"
+==========================================================================
+        IPv6 All In One VPS Server
+==========================================================================
 
-# Process the selection
-case $selection in
-  1)
-    echo "Đang lấy IPv6 mới..."
-    wget -q -O $WORKDATA $UPDATE_URL && source $WORKDATA
-    if [[ -z "$ipv6" ]]; then
-      echo "Không thể lấy được địa chỉ IPv6 mới!"
-    else
-      echo "Đã lấy được địa chỉ IPv6 mới: $ipv6/$ipv6mask"
-      updateIPv6Settings
-      systemctl restart network
-      echo "IPv6 đã được cập nhật thành công!"
-    fi
-    ;;
-  2)
-    ipv6addr=$(curl -s "https://v6.lowendviet.com/ip.php")
-    echo "IPv6 hiện tại của bạn là: $ipv6addr"
-    ;;
-  3)
-    echo -n "Nhập số lượng proxy IPv6 cần tạo: "
-    read proxyCount
+EOF
+
+    echo "Menu chính:"
     echo ""
-    if [[ "$proxyCount" =~ ^[0-9]+$ ]]; then
-      createIPv6Proxy
-      echo "Đã tạo thành công $proxyCount proxy IPv6."
-    else
-      echo "Số lượng proxy không hợp lệ!"
-    fi
-    ;;
-  0)
-    echo "Kết thúc!"
-    ;;
-  *)
-    echo "Xin hãy chọn lựa chính xác!"
-    ;;
-esac
+    echo "1 - Tự động cập nhật địa chỉ IPv6 mới"
+    echo "2 - Hiển thị IPv6 hiện tại"
+    echo "3 - Tạo proxy IPv6"
+    echo "0 - Thoát"
+    echo ""
+    echo -n "Nhập lựa chọn của bạn: "
+    read selection
+    echo ""
+
+    case $selection in
+      1)
+        echo "Đang lấy IPv6 mới..."
+        wget -q -O $WORKDATA $UPDATE_URL && source $WORKDATA
+        if [[ -z "$ipv6" ]]; then
+          echo "Không thể lấy được địa chỉ IPv6 mới!"
+        else
+          echo "Đã lấy được địa chỉ IPv6 mới: $ipv6/$ipv6mask"
+          updateIPv6Settings
+          systemctl restart network
+          echo "IPv6 đã được cập nhật thành công!"
+        fi
+        ;;
+      2)
+        ipv6addr=$(curl -s "https://v6.lowendviet.com/ip.php")
+        echo "IPv6 hiện tại của bạn là: $ipv6addr"
+        ;;
+      3)
+        echo -n "Nhập số lượng proxy IPv6 cần tạo: "
+        read proxyCount
+        echo ""
+        if [[ "$proxyCount" =~ ^[0-9]+$ ]]; then
+          createIPv6Proxy
+          echo "Đã tạo thành công $proxyCount proxy IPv6."
+        else
+          echo "Số lượng proxy không hợp lệ!"
+        fi
+        ;;
+      0)
+        echo "Kết thúc!"
+        exit 0
+        ;;
+      *)
+        echo "Xin hãy chọn lựa chính xác!"
+        ;;
+    esac
+
+    # Yêu cầu người dùng nhấn Enter để tiếp tục
+    echo ""
+    echo -n "Nhấn Enter để quay lại menu chính..."
+    read -s -n 1
+    echo ""
+  done
+}
+
+# Khởi động menu chính
+mainMenu
