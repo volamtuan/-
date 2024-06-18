@@ -2,8 +2,8 @@
 ###Script Proxy
 
 # Final vars
-WORKDIR="/etc/lev/"
-LOGFILE="/var/log/levip6.log"
+WORKDIR="/home/proxy/"
+LOGFILE="/home/proxy/proxy.log"
 
 cat << "EOF"
 ==========================================================================
