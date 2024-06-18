@@ -4,9 +4,9 @@
 # Final vars
 BIN_DIR="/usr/local/bin/"
 BIN_EXEC="${BIN_DIR}levip6"
-WORKDIR="/etc/lev/"
+WORKDIR="/home/proxy"
 WORKDATA="${WORKDIR}/data.txt"
-LOGFILE="/var/log/levip6.log"
+LOGFILE="/home/proxy/levip6.log"
 
 cat << "EOF"
 ==========================================================================
