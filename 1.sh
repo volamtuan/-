@@ -144,14 +144,14 @@ gen_3proxy_cfg > /usr/local/etc/3proxy/3proxy.cfg
 chmod +x /etc/rc.local
 bash /etc/rc.local
 
-# Xoay IPv6 định kỳ
-while true; do
-    rotate_ipv6
-done
-
 gen_proxy_file_for_user
 
 echo "Starting Proxy"
 echo "So Luong IPv6 Hien Tai:"
 ip -6 addr | grep inet6 | wc -l
 download_proxy
+
+# Xoay IPv6 định kỳ
+while true; do
+    rotate_ipv6
+done
