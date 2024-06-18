@@ -2,7 +2,7 @@
 ###Script Proxy
 
 # Final vars
-WORKDIR="/home/proxy/"
+WORKDIR="/home/proxy"
 LOGFILE="/home/proxy/proxy.log"
 
 cat << "EOF"
