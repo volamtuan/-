@@ -33,11 +33,12 @@ else
     exit 1
 fi
 
+# Tải và cài đặt Softaculous
 wget -N https://files.softaculous.com/install.sh
 chmod 777 install.sh
 bash install.sh
 
-
+# Thiết lập và cài đặt các phiên bản PHP
 cd /usr/local/directadmin/custombuild
 ./build set php1_release 8.1
 ./build set php2_release 7.4
@@ -49,23 +50,29 @@ cd /usr/local/directadmin/custombuild
 ./build set php4_mode lsphp
 ./build php n
 ./build rewrite_confs
+
+# Cập nhật hệ thống
 sudo apt update
+
+# Thiết lập các hàm PHP bị vô hiệu hóa
 cd /usr/local/directadmin/custombuild
-mkdir custom
+mkdir -p custom
 touch custom/php_disable_functions
 echo "exec,system,passthru,shell_exec,dl,popen,show_source,posix_kill,posix_mkfifo,posix_getpwuid,posix_setpgid,posix_setsid,posix_setuid,posix_setgid,posix_seteuid,posix_setegid,posix_uname" > custom/php_disable_functions
 ./build set secure_php yes
 ./build secure_php
-Check: grep disable_functions /usr/local/php*/lib/php.ini
 
-Step 3: 1-Click Install
-https://raw.githubusercontent.com/volamtuan/-/main/0.sh
+# Kiểm tra các hàm PHP bị vô hiệu hóa
+grep disable_functions /usr/local/php*/lib/php.ini
+
+# Cài đặt JetBackup và JetApps
 bash <(wget -qO- https://repo.jetlicense.com/static/install)
 jetapps --install jetbackup cpanel stable
 
-
+# Cài đặt LiteSpeed Web Server
 wget https://www.litespeedtech.com/packages/cpanel/lsws_whm_autoinstaller.sh
 chmod a+x lsws_whm_autoinstaller.sh
 ./lsws_whm_autoinstaller.sh TRIAL
 
+# Cài đặt WP Toolkit cho cPanel
 sh <(curl https://wp-toolkit.plesk.com/cPanel/installer.sh || wget -O - https://wp-toolkit.plesk.com/cPanel/installer.sh)
