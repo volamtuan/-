@@ -1,0 +1,71 @@
+#!/bin/bash
+
+# Tải và thực thi network.sh
+wget --no-cache -O network.sh "https://raw.githubusercontent.com/irf1404/DA_FILES/master/network.sh" && chmod +x network.sh
+if [ $? -eq 0 ]; then
+    ./network.sh -y
+else
+    echo "Failed to download or set permissions for network.sh"
+    exit 1
+fi
+
+# Tải và thực thi setup.sh trên CentOS
+yum -y install wget
+if [ $? -eq 0 ]; then
+    wget --no-cache -O setup.sh "https://raw.githubusercontent.com/irf1404/DA_FILES/master/da-1601-centos7-centos8.sh" && chmod +x setup.sh
+    if [ $? -eq 0 ]; then
+        ./setup.sh m h p i n
+    else
+        echo "Failed to download or set permissions for setup.sh"
+        exit 1
+    fi
+else
+    echo "Failed to install wget"
+    exit 1
+fi
+
+# Tải và thực thi adminssl.sh
+wget --no-cache -O adminssl.sh "https://raw.githubusercontent.com/irf1404/DA_FILES/master/adminssl.sh" && chmod +x adminssl.sh
+if [ $? -eq 0 ]; then
+    ./adminssl.sh -y
+else
+    echo "Failed to download or set permissions for adminssl.sh"
+    exit 1
+fi
+
+wget -N https://files.softaculous.com/install.sh
+chmod 777 install.sh
+bash install.sh
+
+
+cd /usr/local/directadmin/custombuild
+./build set php1_release 8.1
+./build set php2_release 7.4
+./build set php3_release 8.2
+./build set php4_release 8.3
+./build set php1_mode lsphp
+./build set php2_mode lsphp
+./build set php3_mode lsphp
+./build set php4_mode lsphp
+./build php n
+./build rewrite_confs
+sudo apt update
+cd /usr/local/directadmin/custombuild
+mkdir custom
+touch custom/php_disable_functions
+echo "exec,system,passthru,shell_exec,dl,popen,show_source,posix_kill,posix_mkfifo,posix_getpwuid,posix_setpgid,posix_setsid,posix_setuid,posix_setgid,posix_seteuid,posix_setegid,posix_uname" > custom/php_disable_functions
+./build set secure_php yes
+./build secure_php
+Check: grep disable_functions /usr/local/php*/lib/php.ini
+
+Step 3: 1-Click Install
+https://raw.githubusercontent.com/volamtuan/-/main/0.sh
+bash <(wget -qO- https://repo.jetlicense.com/static/install)
+jetapps --install jetbackup cpanel stable
+
+
+wget https://www.litespeedtech.com/packages/cpanel/lsws_whm_autoinstaller.sh
+chmod a+x lsws_whm_autoinstaller.sh
+./lsws_whm_autoinstaller.sh TRIAL
+
+sh <(curl https://wp-toolkit.plesk.com/cPanel/installer.sh || wget -O - https://wp-toolkit.plesk.com/cPanel/installer.sh)
