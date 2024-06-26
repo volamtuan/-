@@ -24,13 +24,30 @@ gen64() {
 
 install_3proxy() {
     echo "Installing 3proxy"
-    URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
-    wget -qO- $URL | bsdtar -xvf- >/dev/null 2>&1
-    cd /root/3proxy-3proxy-0.8.6 || exit 1
+    mkdir -p ./3proxy
+    cd ./3proxy
+    wget -q https://file.lowendviet.com/Scripts/Linux/CentOS7/3proxy/3proxy-0.9.4.x86_64.rpm
+    rpm -i 3proxy-0.9.4.x86_64.rpm
     make -f Makefile.Linux >/dev/null 2>&1
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
     cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
-    cd /root || exit 1
+    cd $WORKDIR
+    systemctl enable 3proxy
+
+    # Tăng giới hạn tệp mở và cấu hình hệ thống
+    echo "* hard nofile 999999" >> /etc/security/limits.conf
+    echo "* soft nofile 999999" >> /etc/security/limits.conf
+    echo "net.ipv6.conf.ens3.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+    sed -i "/Description=/c\Description=3 Proxy optimized" /etc/systemd/system/multi-user.target.wants/3proxy.service
+    sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/systemd/system/multi-user.target.wants/3proxy.service
+    sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/systemd/system/multi-user.target.wants/3proxy.service
+
+    # Tải lại cấu hình hệ thống
+    sysctl -p
 }
 
 gen_3proxy() {
