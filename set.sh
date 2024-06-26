@@ -1,4 +1,24 @@
-#!/bin/bash
+#!/bin/sh
+
+# Thiết lập biến PATH
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Hàm thiết lập IPv6
+setup_ipv6() {
+    echo "Thiết lập IPv6..."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
+}
+
+# Gọi hàm thiết lập IPv6
+setup_ipv6
+
+# Cài đặt các gói cần thiết
+yum install make wget curl jq git iptables-services -y
+
+# Lấy tên interface mạng
+NETWORK_INTERFACE_NAME=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
+echo "MTU=1500" >> /etc/sysconfig/network-scripts/ifcfg-$NETWORK_INTERFACE_NAME
 
 # Kiểm tra hệ thống có sử dụng YUM hay không
 YUM=$(which yum)
@@ -60,8 +80,6 @@ EOF
 
     service network restart
 
-    rm -rf set.sh
-
 # Nếu không sử dụng YUM thì kiểm tra sử dụng apt (Ubuntu)
 else
     ipv4=$(curl -4 -s icanhazip.com)
@@ -71,10 +89,10 @@ else
     if [ "$IPC" = "4" ]; then
         IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
         GATEWAY="2403:6a40:0:40::1"
-    elif [ "$IPC" = "5" ]; then
+    elif [ "$IPC" = "5" ]; thì
         IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
         GATEWAY="2403:6a40:0:41::1"
-    elif [ "$IPC" = "244" ]; then
+    elif [ "$IPC" = "244" ]; thì
         IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
         GATEWAY="2403:6a40:2000:244::1"
     else
@@ -96,3 +114,241 @@ else
 fi
 
 echo 'IPv6 đã được cấu hình thành công!'
+
+# Hàm random để tạo chuỗi ngẫu nhiên
+random() {
+    tr </dev/urandom -dc A-Za-z0-9 | head -c5
+    echo
+}
+
+# Hàm tạo địa chỉ IPv6 ngẫu nhiên
+array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
+gen64() {
+    ip64() {
+        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+    }
+    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
+}
+
+# Hàm cài đặt 3proxy
+install_3proxy() {
+    echo "Installing 3proxy"
+    URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
+    wget -qO- $URL | bsdtar -xvf- >/dev/null 2>&1
+    cd 3proxy-3proxy-0.8.6  # Đã sửa thành đường dẫn tuyệt đối
+    make -f Makefile.Linux >/dev/null 2>&1
+    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
+    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
+    cd ${WORKDATA}
+    rm -fr ${WORKDATA}/3proxy-3proxy-0.8.6
+}
+
+# Hàm tạo file cấu hình cho 3proxy
+gen_3proxy() {
+    cat <<EOF 
+daemon
+maxconn 5000
+nserver 1.1.1.1
+nserver 8.8.4.4
+nserver 2001:4860:4860::8888
+nserver 2001:4860:4860::8844
+nscache 65536
+nscache6 65536
+timeouts 1 5 30 60 180 1800 15 60
+setgid 65535
+setuid 65535
+stacksize 6291456 
+flush
+auth none
+allow 127.0.0.1
+
+$(awk -F "/" '{print "proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\nflush\n"}' ${WORKDATA})
+EOF
+}
+
+# Hàm tạo file proxy cho người dùng
+gen_proxy_file_for_user() {
+    cat >proxy.txt <<EOF
+$(awk -F "/" '{print $3 ":" $4}' ${WORKDATA})
+EOF
+}
+
+# Hàm tạo dữ liệu
+gen_data() {
+    seq $FIRST_PORT $LAST_PORT | while read port; do
+        echo "//$IP4/$port/$(gen64 $IP6)"
+    done
+}
+
+# Hàm tạo iptables
+gen_iptables() {
+    cat <<EOF
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
+EOF
+}
+
+# Hàm cấu hình ifconfig
+gen_ifconfig() {
+    cat <<EOF
+$(awk -F "/" '{print "ifconfig '"$NETWORK_INTERFACE_NAME"' inet6 add " $5 "/64"}' ${WORKDATA})
+EOF
+}
+
+Cài đặt các ứng dụng cần thiết
+
+echo “Installing apps”
+sudo yum install make wget curl jq git iptables-services -y >/dev/null 2>&1
+sudo apt install make wget curl jq git iptables-services -y >/dev/null 2>&1
+install_3proxy
+
+Thiết lập thư mục làm việc
+
+WORKDIR=”/home/proxy”
+WORKDATA=”${WORKDIR}/data.txt”
+mkdir $WORKDIR && cd $_
+
+Lấy địa chỉ IP
+
+IP4=$(curl -4 -s icanhazip.com)
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d’:’)
+
+echo “IPv4 = ${IP4}”
+echo “IPv6 = ${IP6}”
+
+FIRST_PORT=10000
+LAST_PORT=22222
+
+echo “Cổng proxy: $FIRST_PORT”
+echo “Số Lượng Tạo: $(($LAST_PORT - $FIRST_PORT + 1))”
+
+Bổ sung lệnh để tăng giới hạn file descriptor
+
+echo “* hard nofile 999999” | sudo tee -a /etc/security/limits.conf
+echo “* soft nofile 999999” | sudo tee -a /etc/security/limits.conf
+
+Cấu hình sysctl để hỗ trợ IPv6
+
+echo “net.ipv6.conf.ens3.proxy_ndp=1” | sudo tee -a /etc/sysctl.conf
+echo “net.ipv6.conf.all.proxy_ndp=1” | sudo tee -a /etc/sysctl.conf
+echo “net.ipv6.conf.default.forwarding=1” | sudo tee -a /etc/sysctl.conf
+echo “net.ipv6.conf.all.forwarding=1” | sudo tee -a /etc/sysctl.conf
+echo “net.ipv6.ip_nonlocal_bind = 1” | sudo tee -a /etc/sysctl.conf
+
+Thiết lập mô tả cho 3proxy
+
+sudo sed -i “/Description=/c\Description=3 Proxy optimized by VLT PRO” /etc/sysctl.conf
+
+Thiết lập giới hạn file descriptor và process
+
+sudo sed -i “/LimitNOFILE=/c\LimitNOFILE=9999999” /etc/sysctl.conf
+sudo sed -i “/LimitNPROC=/c\LimitNPROC=9999999” /etc/sysctl.conf
+
+Tạo dữ liệu
+
+gen_data >$WORKDIR/data.txt
+gen_iptables >$WORKDIR/boot_iptables.sh
+gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+chmod +x $WORKDIR/boot_*.sh
+
+Tạo file cấu hình cho 3proxy
+
+gen_3proxy > /usr/local/etc/3proxy/3proxy.cfg
+
+Tạo file dịch vụ systemd cho 3proxy
+
+cat </etc/systemd/system/3proxy.service
+[Unit]
+Description=3proxy Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
+ExecReload=/bin/kill -HUP $MAINPID
+ExecStop=/bin/kill -TERM $MAINPID
+Restart=always
+RestartSec=5
+LimitNOFILE=1000000
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+Tạo file dịch vụ systemd cho rc.local nếu chưa có
+
+cat </etc/systemd/system/rc-local.service
+[Unit]
+Description=/etc/rc.local Compatibility
+ConditionPathExists=/etc/rc.local
+
+[Service]
+Type=forking
+ExecStart=/etc/rc.local start
+TimeoutSec=0
+StandardOutput=tty
+RemainAfterExit=yes
+SysVStartPriority=99
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+Tạo file rc.local nếu chưa tồn tại
+
+cat </etc/rc.local
+#!/bin/sh -e
+
+rc.local
+
+This script is executed at the end of each multiuser runlevel.
+
+Make sure that the script will “exit 0” on success or any other
+
+value on error.
+
+bash /home/proxy/boot_iptables.sh
+bash /home/proxy/boot_ifconfig.sh
+ulimit -n 1000000
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+
+exit 0
+EOF
+
+chmod +x /etc/rc.local
+
+Tối ưu hóa cấu hình kernel
+
+cat <>/etc/sysctl.conf
+fs.file-max = 1000000
+net.ipv4.ip_local_port_range = 1024 65000
+net.ipv4.tcp_fin_timeout = 30
+net.core.somaxconn = 4096
+net.core.netdev_max_backlog = 4096
+EOF
+
+Áp dụng các thay đổi cấu hình kernel
+
+sysctl -p
+
+Kích hoạt và khởi động các dịch vụ
+
+systemctl enable rc-local
+systemctl enable 3proxy
+
+systemctl start rc-local
+systemctl start 3proxy
+
+Kiểm tra trạng thái dịch vụ
+
+systemctl status rc-local
+systemctl status 3proxy
+
+Tạo tập tin proxy cho người dùng
+
+gen_proxy_file_for_user
+rm -rf /root/3proxy-3proxy-0.8.6
+
+echo “Starting Proxy”
+
+echo “Tổng số IPv6 hiện tại:”
+ip -6 addr | grep inet6 | wc -lp
