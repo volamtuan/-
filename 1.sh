@@ -28,8 +28,6 @@ install_3proxy() {
     cd ./3proxy
     wget -q https://file.lowendviet.com/Scripts/Linux/CentOS7/3proxy/3proxy-0.9.4.x86_64.rpm
     rpm -i 3proxy-0.9.4.x86_64.rpm
-    systemctl enable 3proxy
-    
     # Tăng giới hạn tệp mở và cấu hình hệ thống
     echo "* hard nofile 999999" >> /etc/security/limits.conf
     echo "* soft nofile 999999" >> /etc/security/limits.conf
