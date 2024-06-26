@@ -103,7 +103,7 @@ echo "IPv4 = ${IP4}"
 echo "IPv6 = ${IP6}"
 
 FIRST_PORT=10000
-LAST_PORT=22222
+LAST_PORT=10222
 
 echo "Cổng proxy: $FIRST_PORT"
 echo "Số lượng: $(($LAST_PORT - $FIRST_PORT + 1))"
