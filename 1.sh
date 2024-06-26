@@ -28,12 +28,8 @@ install_3proxy() {
     cd ./3proxy
     wget -q https://file.lowendviet.com/Scripts/Linux/CentOS7/3proxy/3proxy-0.9.4.x86_64.rpm
     rpm -i 3proxy-0.9.4.x86_64.rpm
-    make -f Makefile.Linux >/dev/null 2>&1
-    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
-    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
-    cd $WORKDIR
     systemctl enable 3proxy
-
+    
     # Tăng giới hạn tệp mở và cấu hình hệ thống
     echo "* hard nofile 999999" >> /etc/security/limits.conf
     echo "* soft nofile 999999" >> /etc/security/limits.conf
@@ -48,6 +44,7 @@ install_3proxy() {
 
     # Tải lại cấu hình hệ thống
     sysctl -p
+    cd $WORKDIR
 }
 
 gen_3proxy() {
