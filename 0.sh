@@ -1,154 +1,172 @@
-#!/bin/bash
+#!/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-if [ "$(id -u)" != '0' ]; then
-    echo 'Error: this script can only be executed by root'
-    exit 1
-fi
+setup_ipv6() {
+    echo "Thiết lập IPv6..."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
+    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
+}
+setup_ipv6
 
-# Lấy địa chỉ IP4 từ hệ thống
-IP4=$(curl -4 -s icanhazip.com)
-if [ -z "$IP4" ]; then
-    echo 'Error: could not retrieve IPv4 address'
-    exit 1
-fi
-
-echo "Địa chỉ IPv4 của bạn: $IP4"
-
-# Lấy địa chỉ IP6 từ hệ thống nếu có, nếu không yêu cầu người dùng nhập thủ công
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-DEFAULT_PREFIX="${IP6:-2607:f8b0:4001:c2f}"
-read -r -p "Nhập IPv6 của bạn (mặc định: $DEFAULT_PREFIX): " vPrefix
-vPrefix=${vPrefix:-$DEFAULT_PREFIX}  # Sử dụng giá trị mặc định nếu không nhập
-
-read -r -p "Số lượng Proxy: " vCount
-read -r -p "IP có quyền truy cập vào Proxy này: " vIp2
-
-# Kiểm tra các giá trị đầu vào
-if [ -z "$vCount" ] || [ -z "$vIp2" ]; then
-    echo 'Error: bạn phải nhập tất cả các thông tin cần thiết'
-    exit 1
-fi
-
-# Cài đặt các gói cần thiết
-yum -y groupinstall "Development Tools"
-yum -y install gcc zlib-devel openssl-devel readline-devel ncurses-devel wget tar dnsmasq net-tools iptables-services nano
-
-# Tải về và biên dịch 3proxy
-git clone https://github.com/z3APA3A/3proxy.git
-cd 3proxy
-make -f Makefile.Linux
-ulimit -u unlimited -n 999999 -s 16384
-
-# Tải các tập tin cấu hình
-wget https://raw.githubusercontent.com/volamtuan/-/main/3proxycfg.sh
-chmod 0755 3proxycfg.sh
-
-# Cập nhật tập tin cấu hình 3proxy
-sed -i "s/1.4.8.8/$vIp2/g" /root/3proxy/3proxycfg.sh
-sed -i "s/i127.0.0.1/i$IP4/g" /root/3proxy/3proxycfg.sh
-
-# Mở rộng giới hạn file
-echo '* hard nofile 999999' >> /etc/security/limits.conf
-echo '* soft nofile 999999' >> /etc/security/limits.conf
-
-echo $vPrefix > v_prefix.txt
-echo $vCount > v_count.txt
-
-echo ====================================
-echo      Stop 3proxy:  OK!
-echo ====================================
-
-kill -9 $(pidof 3proxy) 2>/dev/null
-
-echo ====================================
-echo  Remove old ip.list
-echo ====================================
-
-rm -rf ip.list
-
-echo ====================================
-echo      Generate IPs: OK!
-echo ====================================
-
-network=$vPrefix
-MAXCOUNT=$vCount
+random() {
+    tr </dev/urandom -dc A-Za-z0-9 | head -c5
+    echo
+}
 
 array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
-count=1
-
-rnd_ip_block () {
-    a=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
-    b=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
-    c=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
-    d=${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}${array[$RANDOM%16]}
-    echo $network:$a:$b:$c:$d >> ip.list
+gen64() {
+    ip64() {
+        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+    }
+    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
 }
 
-while [ "$count" -le $MAXCOUNT ]; do
-    rnd_ip_block
-    count=$((count + 1))
-done
-
-echo ====================================
-echo      Restarting Network: OK!
-echo ====================================
-
-service network restart
-
-echo ====================================
-echo      Adding IPs to interface: OK!
-echo ====================================
-
-for i in $(cat ip.list); do
-    echo "ifconfig eth0 inet6 add $i/64"
-    ifconfig eth0 inet6 add $i/64
-done
-
-echo ====================================
-echo      Generate 3proxy.cfg: OK!
-echo ====================================
-
-/root/3proxy/3proxycfg.sh > /root/3proxy/3proxy.cfg
-
-echo ====================================
-echo      Start 3proxy: OK!
-echo ====================================
-
-/root/3proxy/bin/3proxy /root/3proxy/3proxy.cfg
-
-echo ====================================
-echo      Stop Firewall: OK!
-echo ====================================
-
-#systemctl stop firewalld
-#systemctl disable firewalld
-
-gen_ip() {
-    IP=$(curl -4 -s icanhazip.com)
-    FIRST_PORT=10001
-    LAST_PORT="$MAXCOUNT"
-    OUTPUT_FILE="/root/3proxy/proxy.txt"
-
-    for port in $(seq "$FIRST_PORT" "$LAST_PORT"); do
-        echo "$IP:$port" >> "$OUTPUT_FILE"
-    done
-
-    echo "Tạo Proxy $OUTPUT_FILE"
+install_3proxy() {
+    echo "installing 3proxy"
+    mkdir -p /3proxy
+    cd /3proxy
+    URL="https://github.com/z3APA3A/3proxy/archive/0.9.3.tar.gz"
+    wget -qO- $URL | bsdtar -xvf-
+    cd 3proxy-0.9.3
+    make -f Makefile.Linux
+    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
+    mv /3proxy/3proxy-0.9.3/bin/3proxy /usr/local/etc/3proxy/bin/
+    wget https://raw.githubusercontent.com/xlandgroup/ipv4-ipv6-proxy/master/scripts/3proxy.service-Centos8 --output-document=/3proxy/3proxy-0.9.3/scripts/3proxy.service2
+    cp /3proxy/3proxy-0.9.3/scripts/3proxy.service2 /usr/lib/systemd/system/3proxy.service
+    systemctl link /usr/lib/systemd/system/3proxy.service
+    systemctl daemon-reload
+    systemctl enable 3proxy
+    echo "* hard nofile 999999" >>  /etc/security/limits.conf
+    echo "* soft nofile 999999" >>  /etc/security/limits.conf
+    echo "net.ipv6.conf.${NETWORK_INTERFACE_NAME}.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+    sysctl -p
+    systemctl stop firewalld
+    systemctl disable firewalld
+    cd $WORKDIR
 }
 
-gen_ip
+gen_3proxy() {
+    cat <<EOF 
+daemon
+maxconn 10000
+nserver 1.1.1.1
+nserver 8.8.4.4
+nserver 2001:4860:4860::8888
+nserver 2001:4860:4860::8844
+nscache 65536
+nscache6 65536
+timeouts 1 5 30 60 180 1800 15 60
+setgid 65535
+setuid 65535
+stacksize 6291456 
+flush
+auth none
+allow 127.0.0.1
 
-check_all_ipv6_live() {
-    ip -6 addr | grep inet6 | while read -r line; do
-        address=$(echo "$line" | awk '{print $2}')
-        ip6=$(echo "$address" | cut -d'/' -f1)
-        ping6 -c 1 $ip6 > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            echo "$ip6 is live"
-        else
-            echo "$ip6 is not live"
-        fi
+$(awk -F "/" '{print "proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\nflush\n"}' ${WORKDATA})
+EOF
+}
+
+gen_proxy_file_for_user() {
+    cat >proxy.txt <<EOF
+$(awk -F "/" '{print $3 ":" $4}' ${WORKDATA})
+EOF
+}
+
+gen_data() {
+    seq $FIRST_PORT $LAST_PORT | while read port; do
+        echo "//$IP4/$port/$(gen64 $IP6)"
     done
 }
 
-check_all_ipv6_live
+gen_iptables() {
+    cat <<EOF
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
+EOF
+}
+
+gen_ifconfig() {
+    cat <<EOF
+$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
+EOF
+}
+
+# Cài đặt các ứng dụng cần thiết
+echo "Installing apps"
+sudo yum -y install curl wget gcc net-tools bsdtar zip >/dev/null 2>&1
+
+install_3proxy
+
+# Thiết lập thư mục làm việc
+WORKDIR="/home/proxy"
+WORKDATA="${WORKDIR}/data.txt"
+mkdir $WORKDIR && cd $_
+
+# Lấy địa chỉ IP
+IP4=$(curl -4 -s icanhazip.com)
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+
+echo "IPv4 = ${IP4}"
+echo "IPv6 = ${IP6}"
+
+FIRST_PORT=10000
+LAST_PORT=22222
+
+echo "Cổng proxy: $FIRST_PORT"
+echo "Số Lượng Tạo: $(($LAST_PORT - $FIRST_PORT + 1))"
+
+gen_data >$WORKDIR/data.txt
+gen_iptables >$WORKDIR/boot_iptables.sh
+gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+chmod +x $WORKDIR/boot_*.sh /etc/rc.local
+
+gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
+
+cat >>/etc/rc.local <<EOF
+#!/bin/bash
+systemctl start NetworkManager.service
+killall 3proxy
+service 3proxy start
+bash ${WORKDIR}/boot_iptables.sh
+bash ${WORKDIR}/boot_ifconfig.sh
+ulimit -n 65535
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+EOF
+
+# Bổ sung lệnh để tăng giới hạn file descriptor
+echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
+echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
+
+# Cấu hình sysctl để hỗ trợ IPv6
+echo "net.ipv6.conf.ens3.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv6.conf.all.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv6.conf.default.forwarding=1" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv6.conf.all.forwarding=1" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv6.ip_nonlocal_bind = 1" | sudo tee -a /etc/sysctl.conf
+
+# Thiết lập mô tả cho 3proxy
+sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
+
+# Thiết lập giới hạn file descriptor và process
+sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
+sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
+
+# Áp dụng các thay đổi sysctl
+sudo sysctl -p
+
+chmod +x /etc/rc.local
+bash /etc/rc.local
+
+# Tạo tập tin proxy cho người dùng
+gen_proxy_file_for_user
+rm -rf /home/3proxy-0.9.3
+
+echo "Starting Proxy"
+
+echo "Tổng số IPv6 hiện tại:"
+ip -6 addr | grep inet6 | wc -l
