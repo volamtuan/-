@@ -23,11 +23,16 @@ gen64() {
 }
 
 install_3proxy() {
-    echo "Installing 3proxy"
-    mkdir -p ./3proxy
-    cd ./3proxy
-    wget -q https://file.lowendviet.com/Scripts/Linux/CentOS7/3proxy/3proxy-0.9.4.x86_64.rpm
-    rpm -i 3proxy-0.9.4.x86_64.rpm
+    echo "Installing 3proxy..."
+    URL="https://file.lowendviet.com/Scripts/Linux/CentOS7/3proxy/3proxy-0.9.4.x86_64.rpm"
+    wget $URL -O /tmp/3proxy-0.9.4.x86_64.rpm
+    rpm -Uvh /tmp/3proxy-0.9.4.x86_64.rpm
+    cd 3proxy-0.9.4.x86_64
+    make -f Makefile.Linux >/dev/null 2>&1
+    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
+    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
+    cd $WORKDIR
+    
     # Tăng giới hạn tệp mở và cấu hình hệ thống
     echo "* hard nofile 999999" >> /etc/security/limits.conf
     echo "* soft nofile 999999" >> /etc/security/limits.conf
@@ -39,10 +44,7 @@ install_3proxy() {
     sed -i "/Description=/c\Description=3 Proxy optimized" /etc/systemd/system/multi-user.target.wants/3proxy.service
     sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/systemd/system/multi-user.target.wants/3proxy.service
     sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/systemd/system/multi-user.target.wants/3proxy.service
-
-    # Tải lại cấu hình hệ thống
     sysctl -p
-    cd $WORKDIR
 }
 
 gen_3proxy() {
@@ -124,35 +126,11 @@ ulimit -n 65535
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
 EOF
 
-# Tăng giới hạn file descriptor
-echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
-echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
-
-# Cấu hình sysctl để hỗ trợ IPv6
-sudo tee -a /etc/sysctl.conf <<EOF
-net.ipv6.conf.ens3.proxy_ndp=1
-net.ipv6.conf.all.proxy_ndp=1
-net.ipv6.conf.default.forwarding=1
-net.ipv6.conf.all.forwarding=1
-net.ipv6.ip_nonlocal_bind = 1
-EOF
-
-# Thiết lập mô tả cho 3proxy
-sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/systemd/system/3proxy.service
-
-# Thiết lập giới hạn file descriptor và process
-sudo tee -a /etc/systemd/system/3proxy.service <<EOF
-LimitNOFILE=9999999
-LimitNPROC=9999999
-EOF
-
-# Áp dụng các thay đổi sysctl
-sudo sysctl -p
 chmod +x /etc/rc.local
 bash /etc/rc.local
 
 gen_proxy_file_for_user
-rm -rf /root/3proxy-3proxy-0.8.6
+rm -rf /home/proxy/3proxy-0.9.4.x86_64
 
 echo "Starting Proxy"
 
