@@ -12,61 +12,97 @@ setup_ipv6() {
 # Gọi hàm thiết lập IPv6
 setup_ipv6
 
-# Kiểm tra và cài đặt các gói cần thiết sử dụng YUM hoặc APT
-if command -v yum &> /dev/null; then
-    yum install -y make wget curl jq git iptables-services
-elif command -v apt-get &> /dev/null; then
-    apt-get install -y make wget curl jq git iptables-services
-else
-    echo "Không tìm thấy YUM hoặc APT để cài đặt gói."
-    exit 1
-fi
-
 # Lấy tên interface mạng
 NETWORK_INTERFACE_NAME=$(ip route get 8.8.8.8 | awk '{print $5}')
 
-# Cấu hình các file ifcfg-* trong /etc/sysconfig/network-scripts/
-configure_network_scripts() {
-    IPC=$(echo $(curl -4 -s icanhazip.com | cut -d"." -f3))
-    IPD=$(echo $(curl -4 -s icanhazip.com | cut -d"." -f4))
-    
-    interfaces=$(ip -o link show | awk -F': ' '{print $2}')
-    
-    for iface in $interfaces; do
-        case $IPC in
-            4)
-                IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
-                IPV6_DEFAULTGW="2403:6a40:0:40::1"
-                ;;
-            5)
-                IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
-                IPV6_DEFAULTGW="2403:6a40:0:41::1"
-                ;;
-            244)
-                IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
-                IPV6_DEFAULTGW="2403:6a40:2000:244::1"
-                ;;
-            *)
-                IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
-                IPV6_DEFAULTGW="2403:6a40:0:$IPC::1"
-                ;;
-        esac
-        
-        tee -a /etc/sysconfig/network-scripts/ifcfg-$iface <<-EOF
-            IPV6INIT=yes
-            IPV6_AUTOCONF=no
-            IPV6_DEFROUTE=yes
-            IPV6_FAILURE_FATAL=no
-            IPV6_ADDR_GEN_MODE=stable-privacy
-            IPV6ADDR=$IPV6_ADDRESS
-            IPV6_DEFAULTGW=$IPV6_DEFAULTGW
-EOF
-    done
-    
-    systemctl restart network
-}
+# Tự động lấy địa chỉ IPv4 từ thiết bị
+IP4=$(ip addr show | grep -oP '(?<=inet\s)192(\.\d+){2}\.\d+' | head -n 1)
 
-configure_network_scripts
+# Tự động lấy địa chỉ IPv6/64
+IPV6ADDR=$(ip -6 addr show | grep -oP '(?<=inet6\s)[\da-fA-F:]+(?=/64)' | head -n 1)
+
+# Kiểm tra card mạng eth0
+if ip link show eth0 &> /dev/null; then
+    echo "Card mạng eth0 đã được tìm thấy."
+    
+    # Thiết lập cấu hình mạng cho eth0
+    cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-eth0
+    TYPE=Ethernet
+    NAME=eth0
+    DEVICE=eth0
+    ONBOOT=yes
+    BOOTPROTO=dhcp
+    IPV6_INIT=yes
+    IPV6_AUTOCONF=yes
+    IPV6_DEFROUTE=yes
+    IPV6_FAILURE_FATAL=no
+    IPV6_ADDR_GEN_MODE=eui64
+    IPADDR=$IP4
+    NETMASK=255.255.255.0
+    GATEWAY=192.168.1.1
+    DNS1=8.8.8.8
+    IPV6ADDR=$IPV6ADDR/64
+    IPV6_DEFAULTGW=2001:ee0:4f9b:92b0::1
+EOF
+
+    # Kiểm tra kết nối IPv6
+    if ip -6 route get 2001:ee0:4f9b:92b0::8888 &> /dev/null; then
+        echo "Kết nối IPv6 cho eth0 hoạt động."
+    else
+        echo "Lỗi: Kết nối IPv6 cho eth0 không hoạt động."
+    fi
+
+    # Cấp quyền cho địa chỉ IPv4 của eth0
+    firewall-cmd --zone=public --add-source="$IP4" --permanent
+    firewall-cmd --reload
+
+# Kiểm tra card mạng ens33
+elif ip link show ens33 &> /dev/null; then
+    echo "Card mạng ens33 đã được tìm thấy."
+    
+    # Thiết lập cấu hình mạng cho ens33
+    cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-ens33
+    TYPE=Ethernet
+    NAME=ens33
+    DEVICE=ens33
+    ONBOOT=yes
+    BOOTPROTO=dhcp
+    IPV6_INIT=yes
+    IPV6_AUTOCONF=yes
+    IPV6_DEFROUTE=yes
+    IPV6_FAILURE_FATAL=no
+    IPV6_ADDR_GEN_MODE=eui64
+    IPADDR=$IP4
+    NETMASK=255.255.255.0
+    GATEWAY=192.168.1.1
+    DNS1=8.8.8.8
+    IPV6ADDR=$IPV6ADDR/64
+    IPV6_DEFAULTGW=2001:ee0:4f9b:92b0::1
+EOF
+
+    # Kiểm tra kết nối IPv6
+    if ip -6 route get 2001:ee0:4f9b:92b0::8888 &> /dev/null; then
+        echo "Kết nối IPv6 cho ens33 hoạt động."
+    else
+        echo "Lỗi: Kết nối IPv6 cho ens33 không hoạt động."
+    fi
+
+    # Cấp quyền cho địa chỉ IPv4 của ens33
+    firewall-cmd --zone=public --add-source="$IP4" --permanent
+    firewall-cmd --reload 
+fi
+
+# Khởi động lại dịch vụ mạng
+sudo systemctl restart network
+
+# Kiểm tra kết nối IPv6 bằng cách ping Google
+ping6 -c 3 google.com
+
+# Hiển thị thông tin địa chỉ mạng
+ip addr show
+ip route show
+service network restart
+ping_google6
 echo 'IPv6 đã được cấu hình thành công!'
 
 # Hàm random để tạo chuỗi ngẫu nhiên
