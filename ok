@@ -1,219 +1,63 @@
-#!/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-setup_ipv6() {
-    echo "Setting up IPv6..."
-    ip -6 addr flush dev eth0
-    ip -6 addr flush dev ens33
-    bash <(curl -s "https://raw.githubusercontent.com/volamtuan/proxyv6/main/i.sh")
 }
-setup_ipv6
-
-random() {
-    tr </dev/urandom -dc A-Za-z0-9 | head -c5
-    echo
-}
-
-array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
-
-gen64() {
-    ip64() {
-        echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
-    }
-    echo "$1:$(ip64):$(ip64):$(ip64):$(ip64)"
-}
-
-install_3proxy() {
-    echo "Installing 3proxy..."
-    URL="https://github.com/z3APA3A/3proxy/archive/0.9.3.tar.gz"
-    wget -qO- $URL | tar -xzvf - -C /tmp >/dev/null 2>&1
-    cd 3proxy-0.9.3
-    make -f Makefile.Linux >/dev/null 2>&1
-    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
-    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
-    cd $WORKDIR
-    rm -fr 3proxy-0.9.3
-}
-
-gen_3proxy() {
-    cat <<EOF >/usr/local/etc/3proxy/3proxy.cfg
-daemon
-maxconn 5000
-nserver 1.1.1.1
-nserver 8.8.4.4
-nserver 2001:4860:4860::8888
-nserver 2001:4860:4860::8844
-nscache 65536
-timeouts 1 5 30 60 180 1800 15 60
-setgid 65535
-setuid 65535
-stacksize 6291456
-flush
-allow 14.224.163.75
-allow 127.0.0.1
-
-$(awk -F "/" '{print "allow *" $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\n" \
-"flush\n"}' ${WORKDATA})
-EOF
-}
-
-gen_proxy_file_for_user() {
-    awk -F "/" '{print $3 ":" $4}' ${WORKDATA} > proxy.txt
-}
-
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
-        entry="//$IP4/$port/$(gen64 $IP6)"
-        echo "$entry"
-        echo "$IP4:$port" >> "$WORKDIR/ipv4.txt"
-        echo "$(gen64 $IP6)" >> "$WORKDIR/ipv6.txt"
-    done > $WORKDATA
+        echo "//$IP4/$port/$(gen64 $IP6)/$NETWORK_INTERFACE_NAME"
+    done
 }
 
 gen_iptables() {
     cat <<EOF
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
+    $(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA}) 
 EOF
 }
 
 gen_ifconfig() {
     cat <<EOF
-$(awk -F "/" '{print "ifconfig $interfaces inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig " $6 " inet6 add " $5 "/124"}' ${WORKDATA})
 EOF
 }
 
-echo "Installing necessary packages..."
-yum -y install make wget curl jq git iptables-services >/dev/null 2>&1
+echo "installing apps"
+yum -y install gcc net-tools bsdtar zip make >/dev/null
 
 install_3proxy
 
-# Set working directory
-WORKDIR="/home/proxy"
+echo "working folder = /home/proxy-installer"
+WORKDIR="/home/proxy-installer"
 WORKDATA="${WORKDIR}/data.txt"
 mkdir $WORKDIR && cd $_
 
-# Get IP addresses
 IP4=$(curl -4 -s icanhazip.com)
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+IP6=$(ip addr show dev ${NETWORK_INTERFACE_NAME} | sed -e's/^.*inet6 \([^ ]*\)\/.*$/\1/;t;d' | head -1| cut -f1-4 -d':')
 
-echo "IPv4 = ${IP4}"
-echo "IPv6 = ${IP6}"
+echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}. Network interface name = ${NETWORK_INTERFACE_NAME}"
 
-FIRST_PORT=10000
-LAST_PORT=22222
-
-echo "Proxy ports range: $FIRST_PORT - $LAST_PORT"
-echo "Number of proxies to create: $(($LAST_PORT - $FIRST_PORT + 1))"
+#echo "How proxy create 10000? "
+#read COUNT
+COUNT=10000
+FIRST_PORT=20000
+LAST_PORT=$(($FIRST_PORT + $COUNT))
 
 gen_data >$WORKDIR/data.txt
-gen_iptables >$WORKDIR/boot_iptables.sh >/dev/null 2>&1
-gen_ifconfig >$WORKDIR/boot_ifconfig.sh >/dev/null 2>&1
+gen_iptables >$WORKDIR/boot_iptables.sh
+gen_ifconfig >$WORKDIR/boot_ifconfig.sh
 chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
 gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
-# Configure systemd service for 3proxy
-cat <<EOF >/etc/systemd/system/3proxy.service
-[Unit]
-Description=3proxy Proxy Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
-ExecReload=/bin/kill -HUP \$MAINPID
-ExecStop=/bin/kill -TERM \$MAINPID
-Restart=always
-RestartSec=5
-LimitNOFILE=1000000
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Create rc.local service file if it doesn't exist
-cat <<EOF >/etc/systemd/system/rc-local.service
-[Unit]
-Description=/etc/rc.local Compatibility
-ConditionPathExists=/etc/rc.local
-
-[Service]
-Type=forking
-ExecStart=/etc/rc.local start
-TimeoutSec=0
-StandardOutput=tty
-RemainAfterExit=yes
-SysVStartPriority=99
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Create rc.local file if it doesn't exist
-cat <<EOF >/etc/rc.local
-#!/bin/sh -e
-# rc.local
-
-# This script is executed at the end of each multiuser runlevel.
-# Make sure that the script will "exit 0" on success or any other
-# value on error.
-
-bash /home/proxy/boot_iptables.sh
-bash /home/proxy/boot_ifconfig.sh
-ulimit -n 1000000
+cat >>/etc/rc.local <<EOF
+systemctl start NetworkManager.service
+ifup ${NETWORK_INTERFACE_NAME}
+bash ${WORKDIR}/boot_iptables.sh
+bash ${WORKDIR}/boot_ifconfig.sh
+ulimit -n 65535
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
-
-exit 0
 EOF
 
 chmod +x /etc/rc.local
+bash /etc/rc.local
 
-# Optimize kernel configuration
-cat <<EOF >>/etc/sysctl.conf
-fs.file-max = 1000000
-net.ipv4.ip_local_port_range = 1024 65000
-net.ipv4.tcp_fin_timeout = 30
-net.core.somaxconn = 4096
-net.core.netdev_max_backlog = 4096
-EOF
-
-# Apply kernel configuration changes
-sysctl -p
-
-# Enable and start services
-systemctl enable rc-local
-systemctl enable 3proxy
-
-systemctl start rc-local
-systemctl start 3proxy
-
-# Check service status
-systemctl status rc-local
-systemctl status 3proxy
-
-# Generate proxy file for users
 gen_proxy_file_for_user
 
-echo "Starting Proxy..."
-
-echo "Total current IPv6:"
+echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
-
-# Add commands to increase file descriptor limit
-echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
-echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
-
-# Configure sysctl for IPv6 support
-echo "net.ipv6.conf.ens3.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
-echo "net.ipv6.conf.all.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
-echo "net.ipv6.conf.default.forwarding=1" | sudo tee -a /etc/sysctl.conf
-echo "net.ipv6.conf.all.forwarding=1" | sudo tee -a /etc/sysctl.conf
-echo "net.ipv6.ip_nonlocal_bind = 1" | sudo tee -a /etc/sysctl.conf
-
-# Set description for 3proxy service
-sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
-
-# Set limits for file descriptor and process
-sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
-sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
