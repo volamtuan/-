@@ -2,12 +2,11 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 setup_ipv6() {
-    echo "Thiết lập IPv6..."
+    echo "Setting up IPv6..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
-    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh") 
+    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
 }
-setup_ipv6
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
@@ -71,11 +70,15 @@ gen_data() {
 }
 
 gen_iptables() {
-    awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA} > $WORKDIR/boot_iptables.sh >/dev/null 2>&1
+    cat <<EOF
+$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
+EOF
 }
 
 gen_ifconfig() {
-    awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA} > $WORKDIR/boot_ifconfig.sh
+    cat <<EOF
+$(awk -F "/" '{print "ifconfig $interfaces inet6 add " $5 "/64"}' ${WORKDATA})
+EOF
 }
 
 echo "Installing necessary packages..."
@@ -102,8 +105,8 @@ echo "Proxy ports range: $FIRST_PORT - $LAST_PORT"
 echo "Number of proxies to create: $(($LAST_PORT - $FIRST_PORT + 1))"
 
 gen_data >$WORKDIR/data.txt
-gen_iptables >/dev/null 2>&1
-gen_ifconfig >$WORKDIR/boot_ifconfig.sh
+gen_iptables >$WORKDIR/boot_iptables.sh >/dev/null 2>&1
+gen_ifconfig >$WORKDIR/boot_ifconfig.sh >/dev/null 2>&1
 chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
 gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
@@ -196,20 +199,20 @@ echo "Starting Proxy..."
 echo "Total current IPv6:"
 ip -6 addr | grep inet6 | wc -l
 
-# Bổ sung lệnh để tăng giới hạn file descriptor
+# Add commands to increase file descriptor limit
 echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
 echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
 
-# Cấu hình sysctl để hỗ trợ IPv6
+# Configure sysctl for IPv6 support
 echo "net.ipv6.conf.ens3.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
 echo "net.ipv6.conf.all.proxy_ndp=1" | sudo tee -a /etc/sysctl.conf
 echo "net.ipv6.conf.default.forwarding=1" | sudo tee -a /etc/sysctl.conf
 echo "net.ipv6.conf.all.forwarding=1" | sudo tee -a /etc/sysctl.conf
 echo "net.ipv6.ip_nonlocal_bind = 1" | sudo tee -a /etc/sysctl.conf
 
-# Thiết lập mô tả cho 3proxy
+# Set description for 3proxy service
 sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
 
-# Thiết lập giới hạn file descriptor và process
+# Set limits for file descriptor and process
 sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
 sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
