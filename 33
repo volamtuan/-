@@ -1,5 +1,10 @@
 #!/usr/local/bin/bash
 
+# Tự động phát hiện interface mạng
+auto_detect_interface() {
+    IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+}
+
 # Cấu hình tường lửa
 gen_iptables() {
     systemctl mask firewalld
@@ -15,7 +20,7 @@ gen_iptables() {
 
 # Tạo tệp tin ipv6.txt và cấu hình ifconfig cho IPV6
 gen_ipv6_64() {
-    rm $WORKDIR/ipv6.txt
+    rm -f $WORKDIR/ipv6.txt
     count_ipv6=1
     while [ "$count_ipv6" -le $MAXCOUNT ]
     do
@@ -34,7 +39,7 @@ gen_ipv6_64() {
 
 # Cài đặt và cấu hình 3proxy
 install_3proxy() {
-    echo "installing 3proxy"
+    echo "Cài đặt 3proxy"
     sudo yum install gcc make nano git -y
     git clone https://github.com/z3apa3a/3proxy
     cd 3proxy
@@ -88,9 +93,8 @@ export_txt() {
 
 # Upload file proxy lên server
 upload_proxy() {
-    URL=$(curl -s --upload-file $IP4.txt https://transfer.sh/$IP4.txt)
-    echo "Tạo Proxy thành công! Định dạng IP:PORT:LOGIN:PASS"
-    echo "Tải Proxy tại: ${URL}"
+    cd $WORKDIR || return
+    curl -F "file=@proxy.txt" https://file.io
 }
 
 # Tạo và cấu hình file xoay.sh
@@ -99,7 +103,7 @@ xoay_proxy() {
 #!/usr/bin/bash
 
 gen_ipv6_64() {
-    rm $WORKDIR/ipv6.txt
+    rm -f $WORKDIR/ipv6.txt
     count_ipv6=1
     while [ "$count_ipv6" -le $MAXCOUNT ]
     do
@@ -127,8 +131,9 @@ gen_3proxy_cfg() {
     echo flush
     echo authcache user 86400
     echo auth strong cache
-    echo "users {USERNAME}:CL:{PASSWORD}"
-    echo "allow {USERNAME}"
+    echo "users vlt:CL:vlt"
+    echo "allow vlt"
+    echo "allow 14.224.163.75"
 
     port=$START_PORT
     while read ip; do
@@ -172,7 +177,7 @@ else
     echo "[ERROR]:  thất bại!"
     exit 1
 fi
-
+auto_detect_interface
 IFCFG="$main_interface" 
 WORKDIR="/home/xpx/vivucloud"
 START_PORT=10000
@@ -207,17 +212,18 @@ gen_xoay() {
 
 # Cấu hình cron job
 crontab_config() {
-    echo "*/30 * * * * root sh home/xpx/vivucloud/xoay.sh" >> /etc/crontab
-    echo "Cấu hình xoay hoàn tất mỗi {time} phút sẽ xoay 1 lần "
+    echo "*/30 * * * * root sh /home/xpx/vivucloud/xoay.sh" >> /etc/crontab
+    echo "Cấu hình xoay hoàn tất mỗi 30 phút sẽ xoay 1 lần"
     echo "crontab.sh done"
 }
 
 # Thực thi các hàm theo trình tự
+auto_detect_interface
 gen_iptables
 gen_ipv6_64
 install_3proxy
 gen_3proxy_cfg
-export_txt
+export_txt > $WORKDIR/proxy.txt
 upload_proxy
 xoay_proxy
 xoay_proxy1
