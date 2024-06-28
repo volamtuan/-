@@ -33,31 +33,30 @@ gen_ipv6_64() {
 install_3proxy() {
     echo "Installing 3proxy..."
     URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
-    wget -qO- $URL | tar xz >/dev/null 2>&1
+    wget -qO- $URL | bsdtar -xvf- >/dev/null 2>&1
     cd 3proxy-0.9.4
     make -f Makefile.Linux >/dev/null 2>&1
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
-    cp src/3proxy /usr/local/etc/3proxy/bin/
-    cd $WORKDIR
-    rm -rf 3proxy-0.9.4
-    chkconfig 3proxy on
-    service 3proxy start
-    systemctl stop firewalld
-    systemctl disable firewalld
-    ulimit -n 65535
+    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
+    cd $WORKDIR  # Đã sửa thành đường dẫn tuyệt đối
+    systemctl link /usr/lib/systemd/system/3proxy.service
     systemctl daemon-reload
     systemctl enable 3proxy
-    systemctl start 3proxy
+    echo "* hard nofile 999999" >>  /etc/security/limits.conf
+    echo "* soft nofile 999999" >>  /etc/security/limits.conf
+    echo "net.ipv6.conf.${NETWORK_INTERFACE_NAME}.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+    sysctl -p
+    systemctl stop firewalld
+    systemctl disable firewalld
     echo "fs.file-max = 1000000" | sudo tee -a /etc/sysctl.conf
     echo "net.ipv4.ip_local_port_range = 1024 65000" | sudo tee -a /etc/sysctl.conf
     echo "net.ipv4.tcp_fin_timeout = 30" | sudo tee -a /etc/sysctl.conf
     echo "net.core.somaxconn = 4096" | sudo tee -a /etc/sysctl.conf
     echo "net.core.netdev_max_backlog = 4096" | sudo tee -a /etc/sysctl.conf
-    echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
-    echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
-    sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
-    sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
-    sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
     sudo sysctl -p
 }
 
@@ -160,7 +159,7 @@ gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
 # Cài đặt 3proxy và cấu hình
 install_3proxy
 gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
-service 3proxy restart
+chmod +x $WORKDIR/boot_*.sh /etc/rc.local
 
 # Xuất cấu hình ra tập tin văn bản
 echo "Xuất $IP4.txt"
@@ -174,8 +173,9 @@ echo "Cấu hình Xoay thành công"
 cat <<EOF >/etc/rc.local
 #!/bin/bash
 systemctl start NetworkManager.service
-killall 3proxy
-service 3proxy start
+ifup ${main_interface}
+killall -s QUIT 3proxy
+systemctl start 3proxy
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 65535
 /usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy.cfg &
