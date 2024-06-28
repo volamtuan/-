@@ -6,8 +6,8 @@ setup_ipv6() {
     echo "Thiết lập IPv6..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
+        bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
     yum install make wget curl jq git iptables-services -y
-    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
 }
 setup_ipv6
 
