@@ -3,17 +3,16 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Thiết lập IPv6
 setup_ipv6() {
-    echo "Thiết lập IPv6..."
+    echo "Xoá IPv6 & Setup IPv6 New..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
     bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
     echo "Cài đặt các gói cần thiết..."
-    yum -y install curl wget gcc net-tools tar zip >/dev/null
+    yum -y install curl wget gcc net-tools iptables-services tar zip >/dev/null
     echo "Thiết lập tường lửa...."
     systemctl mask firewalld
     systemctl enable iptables
     systemctl stop firewalld
-    yum install iptables-services -y
     systemctl enable iptables
     systemctl start iptables
     systemctl enable ip6tables
