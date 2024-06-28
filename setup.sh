@@ -8,7 +8,7 @@ setup_ipv6() {
     ip -6 addr flush dev ens33
     bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
     echo "Cài đặt các gói cần thiết..."
-    yum -y install curl wget gcc net-tools iptables tar zip >/dev/null 2>&1
+    yum -y install curl wget git gcc net-tools iptables tar zip
     systemctl stop firewalld
     systemctl disable firewalld
 }
