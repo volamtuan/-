@@ -6,16 +6,10 @@ setup_ipv6() {
     echo "Thiết lập IPv6..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
+    yum install make wget curl jq git iptables-services -y
     bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
 }
 setup_ipv6
-
-echo "Cài App Cần Thiết..."
-if [[ -f /usr/bin/apt-get ]]; then
-    sudo apt-get install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
-elif [[ -f /usr/bin/yum ]]; then
-    sudo yum install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
-fi
 
 # Tự động phát hiện giao diện mạng
 auto_detect_interface() {
