@@ -10,13 +10,6 @@ setup_ipv6() {
 }
 setup_ipv6
 
-echo "Cài App Cần Thiết..."
-if [[ -f /usr/bin/apt-get ]]; then
-    sudo apt-get install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
-elif [[ -f /usr/bin/yum ]]; then
-    sudo yum install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
-fi
-
 # Tự động phát hiện giao diện mạng
 auto_detect_interface() {
     IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
