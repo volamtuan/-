@@ -141,6 +141,8 @@ install_3proxy() {
     make
     sudo make install
     systemctl daemon-reload
+    systemctl enable 3proxy
+    systemctl start 3proxy
     ulimit -n 65535
     chkconfig 3proxy on
     cd $WORKDIR
@@ -156,7 +158,7 @@ install_3proxy() {
     sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
     sudo sysctl -p
     systemctl stop firewalld
-    systemctl disable firewalld
+    systemctl disable firewald
 }
 
 # Function to generate 3proxy configuration
@@ -294,14 +296,6 @@ ExecStop=/bin/kill -SIGINT $MAINPID   # Lệnh dừng dịch vụ 3proxy
 
 [Install]
 WantedBy=multi-user.target" | sudo tee /etc/systemd/system/3proxy.service
-
-# Tải lại systemctl
-systemctl daemon-reload
-
-# Bật dịch vụ 3proxy và cài đặt tự động khởi động cùng hệ thống
-systemctl enable 3proxy
-systemctl start 3proxy
-
 
 
 echo "Tổng số IPv6 hiện tại:"
