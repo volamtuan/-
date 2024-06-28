@@ -100,7 +100,7 @@ upload_proxy() {
 # Tạo và cấu hình file xoay.sh
 xoay_proxy() {
     cat > xoay.sh << "EOF"
-#!/usr/bin/bash
+#!/bin/bash
 
 gen_ipv6_64() {
     rm -f $WORKDIR/ipv6.txt
@@ -116,120 +116,140 @@ gen_ipv6_64() {
     done
 }
 
+# Tạo cấu hình 3proxy
 gen_3proxy_cfg() {
-    echo daemon
-    echo maxconn 3000
-    echo nserver 1.1.1.1
-    echo nserver [2606:4700:4700::1111]
-    echo nserver [2606:4700:4700::1001]
-    echo nserver [2001:4860:4860::8888]
-    echo nscache 65536
-    echo timeouts 1 5 30 60 180 1800 15 60
-    echo setgid 65535
-    echo setuid 65535
-    echo stacksize 6291456 
-    echo flush
-    echo authcache user 86400
-    echo auth strong cache
-    echo "users vlt:CL:vlt"
-    echo "allow vlt"
-    echo "allow 14.224.163.75"
+    echo "daemon"
+    echo "maxconn 10000"
+    echo "nserver 1.1.1.1"
+    echo "nserver 8.8.4.4"
+    echo "nserver [2606:4700:4700::1111]"
+    echo "nserver [2606:4700:4700::1001]"
+    echo "nserver 2001:4860:4860::8888"
+    echo "nserver 2001:4860:4860::8844"
+    echo "nscache 65536"
+    echo "timeouts 1 5 30 60 180 1800 15 60"
+    echo "setgid 65535"
+    echo "setuid 65535"
+    echo "stacksize 6291456"
+    echo "flush"
+    echo "auth none"
+    echo "allow 127.0.0.1"
 
-    port=$START_PORT
-    while read ip; do
+    port="$START_PORT"
+    while read -r ip; do
         echo "proxy -6 -n -a -p$port -i$IP4 -e$ip"
         ((port+=1))
-    done < $WORKDIR/ipv6.txt
+    done < "$WORKDIR/ipv6.txt"
 }
 
+# Tạo lệnh ifconfig cho IPv6
 gen_ifconfig() {
-    while read line; do    
+    while read -r line; do
         echo "ifconfig $IFCFG inet6 add $line/64"
-    done < $WORKDIR/ipv6.txt
+    done < "$WORKDIR/ipv6.txt"
 }
 
-if [ "x$(id -u)" != 'x0' ]; then
-    echo 'Error: this script can only be executed by root'
-    exit 1
-fi
-
-service network restart
-ulimit -n 65535
-
-EOF
+# Xuất cấu hình ra tập tin văn bản
+export_txt() {
+    port="$START_PORT"
+    for ((i=1; i<=$MAXCOUNT; i++)); do
+        echo "$IP4:$port"
+        ((port+=1))
+    done
 }
 
-# Tạo file xoay1.txt
-xoay_proxy1() {
-    var=/root/xoay1.txt
-    cat <<EOF > $var
-if ip -6 route get 2606:4700:4700::1111 &> /dev/null
-then
-    IP4="$IP4"
-    IP6="$IP6"
-    main_interface="$main_interface"
 
-    echo "[OKE]: Thành công"
-    echo "IPV4: $IP4"
-    echo "IPV6: $IP6"
-    echo "Mạng chính: $main_interface"
-else
-    echo "[ERROR]:  thất bại!"
-    exit 1
+Kiểm tra quyền root và khởi động chính script
+
+if [ “$(id -u)” != ‘0’ ]; then
+echo ‘Lỗi: Script này cần chạy với quyền root’
+exit 1
 fi
+
+Các biến chính
+
+WORKDIR=”/home/proxy”
+MAXCOUNT=2000  # Thay thế bằng số lượng IPv6 cần tạo
+mkdir -p “$WORKDIR”
+chmod -R 777 “$WORKDIR”
 auto_detect_interface
-IFCFG="$main_interface" 
-WORKDIR="/home/xpx/vivucloud"
-START_PORT=10000
-MAXCOUNT=2000
-EOF
-}
 
-# Tạo file xoay2.txt
-xoay_proxy2() {
-    cat > xoay2.txt << "EOF"
-echo "Đang tạo $MAXCOUNT IPV6 > ipv6.txt"
+Kiểm tra và lấy địa chỉ IPv4 và IPv6
+
+if ping6 -c3 icanhazip.com &> /dev/null; then
+IP4=$(curl -s ifconfig.me)
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d’:’)
+main_interface=$(ip route get 8.8.8.8 | awk ‘{print $5}’)
+echo “[OKE]: Thành công”
+echo “IPv4: $IP4”
+echo “IPv6: $IP6”
+echo “Giao diện mạng chính: $main_interface”
+else
+echo “[ERROR]: Thất bại!”
+exit 1
+fi
+
+IFCFG=”$main_interface”
+
+Tạo địa chỉ IPv6 và cấu hình
+
+echo “Đang tạo $MAXCOUNT IPv6 > ipv6.txt”
 gen_ipv6_64
-echo "Đang tạo IPV6 gen_ifconfig.sh"
-gen_ifconfig > $WORKDIR/boot_ifconfig.sh
-echo "3proxy Start"
+echo “Đang tạo IPV6 gen_ifconfig.sh”
+gen_ifconfig > “$WORKDIR/boot_ifconfig.sh”
+
+Cài đặt 3proxy và cấu hình
+
+systemctl disable –now firewalld
+service iptables stop
 gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+
+Xuất cấu hình ra tập tin văn bản
+
+echo “Xuất $IP4.txt”
+export_txt > “$WORKDIR/$IP4.txt”
+
+Tạo script xoay để cập nhật địa chỉ IPv6
+
+gen_xoay() {
+cat < “$WORKDIR/xoay.sh”
+#!/bin/bash
+echo “Đang tạo $MAXCOUNT IPv6 > ipv6.txt”
+gen_ipv6_64
+echo “Đang tạo IPV6 gen_ifconfig.sh”
+gen_ifconfig > “$WORKDIR/boot_ifconfig.sh”
+echo “Khởi động lại 3proxy”
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+echo “Đã đặt lại địa chỉ IP”
+EOF
+chmod +x “$WORKDIR/xoay.sh”
+}
+gen_xoay
+
+echo “Cấu hình Xoay thành công”
+
+Tự động khởi động 3proxy khi khởi động hệ thống
+
+chmod +x “$WORKDIR/boot_*.sh” /etc/rc.local
+
+cat >>/etc/rc.local <<EOF
+#!/bin/bash
+systemctl start NetworkManager.service
 killall 3proxy
 service 3proxy start
-echo "Đã Reset IP"
+bash ${WORKDIR}/boot_iptables.sh
+bash ${WORKDIR}/boot_ifconfig.sh
+ulimit -n 65535
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
 EOF
-}
 
-# Tạo file xoay.sh từ xoay1.txt và xoay2.txt
-gen_xoay() {
-    cat xoay1.txt >> xoay.sh
-    cat xoay2.txt >> xoay.sh
-    mv xoay.sh /home/xpx/vivucloud
-    chmod -R 777 /home/xpx/vivucloud
-    rm -rf xoay1.txt
-    rm -rf xoay2.txt
-}
-
-# Cấu hình cron job
-crontab_config() {
-    echo "*/30 * * * * root sh /home/xpx/vivucloud/xoay.sh" >> /etc/crontab
-    echo "Cấu hình xoay hoàn tất mỗi 30 phút sẽ xoay 1 lần"
-    echo "crontab.sh done"
-}
-
-# Thực thi các hàm theo trình tự
-auto_detect_interface
-gen_iptables
-gen_ipv6_64
 install_3proxy
 gen_3proxy_cfg
 export_txt > $WORKDIR/proxy.txt
 xoay_proxy
-xoay_proxy1
-xoay_proxy2
-gen_xoay
-crontab_config
 
-echo "Tổng số IPv6 hiện tại:"
+echo “Tổng số IPv6 hiện tại:”
 ip -6 addr | grep inet6 | wc -l
 upload_proxy
