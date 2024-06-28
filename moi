@@ -1,14 +1,6 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-# Thiết lập IPv6
-xoa_ipv6() {
-    echo "Xoá Tất Cả IPv6 Củ..."
-    ip -6 addr flush dev eth0
-    ip -6 addr flush dev ens33
-}
-xoa_ipv6
-
 # Cài đặt các gói cần thiết
 yum install make wget curl jq git iptables-services -y
 
@@ -148,7 +140,6 @@ install_3proxy() {
     systemctl disable firewalld
     ulimit -n 65535
 }
-
 # Tạo cấu hình 3proxy
 gen_3proxy_cfg() {
     echo "daemon"
@@ -191,51 +182,6 @@ export_txt() {
     done
 }
 
-# Kiểm tra quyền root và khởi động chính script
-if [ "$(id -u)" != '0' ]; then
-    echo 'Lỗi: Script này cần chạy với quyền root'
-    exit 1
-fi
-
-# Các biến chính
-WORKDIR="/home/proxy"
-MAXCOUNT="1000"  # Thay thế bằng số lượng IPv6 cần tạo
-mkdir -p "$WORKDIR"
-chmod -R 777 "$WORKDIR"
-auto_detect_interface
-
-# Kiểm tra và lấy địa chỉ IPv4 và IPv6
-if ping6 -c3 icanhazip.com &> /dev/null; then
-    IP4=$(curl -s ifconfig.me)
-    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-    main_interface=$(ip route get 8.8.8.8 | awk '{print $5}')
-    echo "[OKE]: Thành công"
-    echo "IPv4: $IP4"
-    echo "IPv6: $IP6"
-    echo "Giao diện mạng chính: $main_interface"
-else
-    echo "[ERROR]: Thất bại!"
-    exit 1
-fi
-
-IFCFG="$main_interface"
-
-# Tạo địa chỉ IPv6 và cấu hình
-echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
-gen_ipv6_64
-echo "Đang tạo IPV6 gen_ifconfig.sh"
-gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
-
-# Cài đặt 3proxy và cấu hình
-systemctl disable --now firewalld
-service iptables stop
-gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
-service 3proxy restart
-
-# Xuất cấu hình ra tập tin văn bản
-echo "Xuất $IP4.txt"
-export_txt > "$WORKDIR/$IP4.txt"
-
 # Tạo script xoay để cập nhật địa chỉ IPv6
 gen_xoay() {
     cat <<EOF > "$WORKDIR/xoay.sh"
@@ -255,16 +201,8 @@ gen_xoay
 
 echo "Cấu hình Xoay thành công"
 
-cat >>/etc/rc.local <<EOF
-#!/bin/bash
-systemctl start NetworkManager.service
-killall 3proxy
-service 3proxy start
-bash ${WORKDIR}/boot_iptables.sh
-bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -n 65535
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
-EOF
+# Tải lại systemd
+systemctl daemon-reload
 
 # Cấu hình dịch vụ 3proxy
 echo "[Unit]
@@ -280,9 +218,6 @@ ExecStop=/bin/kill -SIGINT \$MAINPID
 
 [Install]
 WantedBy=multi-user.target" | sudo tee /etc/systemd/system/3proxy.service > /dev/null
-
-# Tải lại systemd
-systemctl daemon-reload
 
 # Bật và cài đặt tự động khởi động dịch vụ 3proxy
 systemctl enable 3proxy
@@ -314,20 +249,15 @@ bash /etc/rc.local
 upload_proxy() {
     URL=$(curl -s --upload-file $IP4.txt https://transfer.sh/$IP4.txt)
     echo "Tạo Proxy thành công! Định dạng IP:PORT"
-    echo "Tải Proxy tại: \${URL}"
+    echo "Tải Proxy tại: ${URL}"
 }
+upload_proxy
 
-service 3proxy start  # Khởi động dịch vụ
-service 3proxy status # Kiểm tra trạng thái dịch vụ
 netstat -tuln | grep 3proxy
 
 # Thêm log cho script và 3proxy
 exec > >(tee -a /var/log/setup_proxy.log) 2>&1
 log /var/log/3proxy.log D
-systemctl restart 3proxy
-
-echo "Reset Khởi động 3 Proxy..."
 
 echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
-upload_proxy
