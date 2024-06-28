@@ -1,119 +1,71 @@
-#!/usr/local/bin/bash
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-# Tự động phát hiện interface mạng
+# Thiết lập IPv6
+setup_ipv6() {
+    echo "Thiết lập IPv6..."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
+    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
+}
+setup_ipv6
+
+echo "Cài App Cần Thiết..."
+if [[ -f /usr/bin/apt-get ]]; then
+    sudo apt-get install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
+elif [[ -f /usr/bin/yum ]]; then
+    sudo yum install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
+fi
+
+# Tự động phát hiện giao diện mạng
 auto_detect_interface() {
     IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
 
-# Cấu hình tường lửa
-gen_iptables() {
-    systemctl mask firewalld
-    systemctl enable iptables
-    systemctl stop firewalld
-    yum install iptables-services -y
-    systemctl enable iptables
-    systemctl start iptables
-    systemctl enable ip6tables
-    systemctl start ip6tables
-    echo "Thiết lập tường lửa...."
-}
-
-# Tạo tệp tin ipv6.txt và cấu hình ifconfig cho IPV6
+# Tạo địa chỉ IPv6 và cấu hình iptables
 gen_ipv6_64() {
-    rm -f $WORKDIR/ipv6.txt
+    rm -f "$WORKDIR/ipv6.txt"
     count_ipv6=1
-    while [ "$count_ipv6" -le $MAXCOUNT ]
-    do
+    while [ "$count_ipv6" -le "$MAXCOUNT" ]; do
         array=( 1 2 3 4 5 6 7 8 9 0 a b c d e f )
         ip64() {
             echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
         }
-        echo $IP6:$(ip64):$(ip64):$(ip64):$(ip64) >> $WORKDIR/ipv6.txt
+        echo "$IP6:$(ip64):$(ip64):$(ip64):$(ip64)" >> "$WORKDIR/ipv6.txt"
         let "count_ipv6 += 1"
     done
-
-    while read line; do    
-        echo "ifconfig $IFCFG inet6 add $line/64"
-    done < $WORKDIR/ipv6.txt > $WORKDIR/boot_ifconfig.sh
 }
 
 # Cài đặt và cấu hình 3proxy
 install_3proxy() {
-    echo "Cài đặt 3proxy"
-    sudo yum install gcc make nano git -y
+    echo "Đang cài đặt 3proxy..."
     git clone https://github.com/z3apa3a/3proxy
-    cd 3proxy
-    ln -s Makefile.Linux Makefile
-    make
-    sudo make install
-    systemctl daemon-reload
-    echo "* hard nofile 999999" >> /etc/security/limits.conf
-    echo "* soft nofile 999999" >> /etc/security/limits.conf
+    cd 3proxy || exit 1
+    ln -s Makefile.Linux Makefile >/dev/null 2>&1
+    make >/dev/null 2>&1
+    sudo make install >/dev/null 2>&1
+    cd "$WORKDIR" || exit 1
+    sudo cp -R 3proxy/scripts/init.d/3proxy /etc/init.d/
+    sudo chmod +x /etc/init.d/3proxy
+    chkconfig 3proxy on
+    service 3proxy start
     systemctl stop firewalld
     systemctl disable firewalld
     ulimit -n 65535
-    chkconfig 3proxy on
-    cd $WORKDIR
-}
-
-# Cấu hình file 3proxy.cfg
-gen_3proxy_cfg() {
-    echo daemon
-    echo maxconn 3000
-    echo nserver 1.1.1.1
-    echo nserver [2606:4700:4700::1111]
-    echo nserver [2606:4700:4700::1001]
-    echo nserver [2001:4860:4860::8888]
-    echo nscache 65536
-    echo timeouts 1 5 30 60 180 1800 15 60
-    echo setgid 65535
-    echo setuid 65535
-    echo stacksize 6291456 
-    echo flush
-    echo authcache user 86400
-    echo auth strong cache
-    echo "users vlt:CL:vlt"
-    echo "allow vlt"
-    echo "allow 14.224.163.75"
-    port=$START_PORT
-    while read ip; do
-        echo "proxy -6 -n -a -p$port -i$IP4 -e$ip"
-        ((port+=1))
-    done < $WORKDIR/ipv6.txt
-}
-
-# Tạo và xuất file danh sách proxy
-export_txt() {
-    port=$START_PORT
-    for ((i=1; i<=$MAXCOUNT; i++)); do
-        echo "$IP4:$port:vlt:vlt"
-        ((port+=1))
-    done
-}
-
-# Upload file proxy lên server
-upload_proxy() {
-    cd $WORKDIR || return
-    curl -F "file=@proxy.txt" https://file.io
-}
-
-# Tạo và cấu hình file xoay.sh
-xoay_proxy() {
-    cat > xoay.sh << "EOF"
-#!/bin/bash
-
-gen_ipv6_64() {
-    rm -f $WORKDIR/ipv6.txt
-    count_ipv6=1
-    while [ "$count_ipv6" -le $MAXCOUNT ]
-    do
-        array=( 1 2 3 4 5 6 7 8 9 0 a b c d e f )
-        ip64() {
-            echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
-        }
-        echo $IP6:$(ip64):$(ip64):$(ip64):$(ip64) >> $WORKDIR/ipv6.txt
-        let "count_ipv6 += 1"
-    done
+    systemctl daemon-reload
+    systemctl enable 3proxy
+    systemctl start 3proxy
+    echo "fs.file-max = 1000000" | sudo tee -a /etc/sysctl.conf
+    echo "net.ipv4.ip_local_port_range = 1024 65000" | sudo tee -a /etc/sysctl.conf
+    echo "net.ipv4.tcp_fin_timeout = 30" | sudo tee -a /etc/sysctl.conf
+    echo "net.core.somaxconn = 4096" | sudo tee -a /etc/sysctl.conf
+    echo "net.core.netdev_max_backlog = 4096" | sudo tee -a /etc/sysctl.conf
+    echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
+    echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
+    sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
+    sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
+    sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
+    sudo sysctl -p
 }
 
 # Tạo cấu hình 3proxy
@@ -158,98 +110,89 @@ export_txt() {
     done
 }
 
+# Tạo script xoay để cập nhật địa chỉ IPv6
+gen_xoay() {
+    cat <<EOF > "$WORKDIR/xoay.sh"
+#!/bin/bash
+echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
+echo "Khởi động lại 3proxy"
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+echo "Đã đặt lại địa chỉ IP"
+EOF
+    chmod +x "$WORKDIR/xoay.sh"
+}
 
-Kiểm tra quyền root và khởi động chính script
-
-if [ “$(id -u)” != ‘0’ ]; then
-echo ‘Lỗi: Script này cần chạy với quyền root’
-exit 1
+# Kiểm tra quyền root và khởi động chính script
+if [ "$(id -u)" != '0' ]; then
+    echo 'Lỗi: Script này cần chạy với quyền root'
+    exit 1
 fi
 
-Các biến chính
-
-WORKDIR=”/home/proxy”
-MAXCOUNT=2000  # Thay thế bằng số lượng IPv6 cần tạo
-mkdir -p “$WORKDIR”
-chmod -R 777 “$WORKDIR”
+# Các biến chính
+WORKDIR="/home/proxy"
+START_PORT=10000
+MAXCOUNT=2000
+mkdir -p "$WORKDIR"
+chmod -R 777 "$WORKDIR"
 auto_detect_interface
 
-Kiểm tra và lấy địa chỉ IPv4 và IPv6
-
+# Kiểm tra và lấy địa chỉ IPv4 và IPv6
 if ping6 -c3 icanhazip.com &> /dev/null; then
-IP4=$(curl -s ifconfig.me)
-IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d’:’)
-main_interface=$(ip route get 8.8.8.8 | awk ‘{print $5}’)
-echo “[OKE]: Thành công”
-echo “IPv4: $IP4”
-echo “IPv6: $IP6”
-echo “Giao diện mạng chính: $main_interface”
+    IP4=$(curl -s ifconfig.me)
+    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+    main_interface=$(ip route get 8.8.8.8 | awk '{print $5}')
+    echo "[OKE]: Thành công"
+    echo "IPv4: $IP4"
+    echo "IPv6: $IP6"
+    echo "Giao diện mạng chính: $main_interface"
+    echo "Cổng proxy: $START_PORT"
+    echo "Số Lượng Tạo: $MAXCOUNT"
 else
-echo “[ERROR]: Thất bại!”
-exit 1
+    echo "[ERROR]: Thất bại!"
+    exit 1
 fi
 
-IFCFG=”$main_interface”
+IFCFG="$main_interface"
 
-Tạo địa chỉ IPv6 và cấu hình
-
-echo “Đang tạo $MAXCOUNT IPv6 > ipv6.txt”
+# Tạo địa chỉ IPv6 và cấu hình
+echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
 gen_ipv6_64
-echo “Đang tạo IPV6 gen_ifconfig.sh”
-gen_ifconfig > “$WORKDIR/boot_ifconfig.sh”
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
 
-Cài đặt 3proxy và cấu hình
-
-systemctl disable –now firewalld
-service iptables stop
+# Cài đặt 3proxy và cấu hình
+install_3proxy
 gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
 service 3proxy restart
 
-Xuất cấu hình ra tập tin văn bản
+# Xuất cấu hình ra tập tin văn bản
+echo "Xuất $IP4.txt"
+export_txt > "$WORKDIR/$IP4.txt"
 
-echo “Xuất $IP4.txt”
-export_txt > “$WORKDIR/$IP4.txt”
-
-Tạo script xoay để cập nhật địa chỉ IPv6
-
-gen_xoay() {
-cat < “$WORKDIR/xoay.sh”
-#!/bin/bash
-echo “Đang tạo $MAXCOUNT IPv6 > ipv6.txt”
-gen_ipv6_64
-echo “Đang tạo IPV6 gen_ifconfig.sh”
-gen_ifconfig > “$WORKDIR/boot_ifconfig.sh”
-echo “Khởi động lại 3proxy”
-gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
-service 3proxy restart
-echo “Đã đặt lại địa chỉ IP”
-EOF
-chmod +x “$WORKDIR/xoay.sh”
-}
+# Tạo script xoay để cập nhật địa chỉ IPv6
 gen_xoay
 
-echo “Cấu hình Xoay thành công”
-
-Tự động khởi động 3proxy khi khởi động hệ thống
-
-chmod +x “$WORKDIR/boot_*.sh” /etc/rc.local
+echo "Cấu hình Xoay thành công"
 
 cat >>/etc/rc.local <<EOF
 #!/bin/bash
 systemctl start NetworkManager.service
 killall 3proxy
 service 3proxy start
-bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 65535
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy.cfg &
 EOF
 
-install_3proxy
-gen_3proxy_cfg
-export_txt > $WORKDIR/proxy.txt
-xoay_proxy
+# Đảm bảo script khởi động cùng hệ thống
+chmod +x /etc/rc.local
+bash /etc/rc.local
 
-echo “Tổng số IPv6 hiện tại:”
+echo "Hoàn Tất..."
+
+echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
-upload_proxy
