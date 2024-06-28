@@ -199,7 +199,7 @@ fi
 
 # Các biến chính
 WORKDIR="/home/proxy"
-MAXCOUNT="{MAXCOUNT}"  # Thay thế bằng số lượng IPv6 cần tạo
+MAXCOUNT="1000"  # Thay thế bằng số lượng IPv6 cần tạo
 mkdir -p "$WORKDIR"
 chmod -R 777 "$WORKDIR"
 auto_detect_interface
