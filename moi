@@ -243,11 +243,11 @@ echo "Export $IP4.txt"
 export_txt > $WORKDIR/$IP4.txt
 
 # Function to upload proxy text file
-upload_proxy() {
-    URL=$(curl -s --upload-file $IP4.txt https://transfer.sh/$IP4.txt)
-    echo "Tạo Proxy thành công! Định dạng IP:PORT"
-    echo "Tải Proxy tại: ${URL}"
+download_proxy() {
+    cd $WORKDIR || exit 1
+    curl -F "$IP4.txt" https://transfer.sh
 }
+
 
 # Function to generate rotation script
 gen_xoay() {
