@@ -248,7 +248,6 @@ download_proxy() {
     curl -F "$IP4.txt" https://transfer.sh
 }
 
-
 # Function to generate rotation script
 gen_xoay() {
     cat <<EOF > xoay.sh
@@ -315,4 +314,4 @@ sudo sysctl -p
 
 echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
-upload_proxy
+download_proxy
