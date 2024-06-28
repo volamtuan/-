@@ -1,0 +1,317 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+xoa_ipv6() {
+    echo "Xoá Tất Cả IPv6..."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
+}
+
+# Gọi hàm xoá IPv6
+xoa_ipv6
+
+
+# Cài đặt các gói cần thiết
+yum install make wget curl jq git iptables-services -y
+
+# Lấy tên interface mạng
+NETWORK_INTERFACE_NAME=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
+echo "MTU=1500" >> /etc/sysconfig/network-scripts/ifcfg-$NETWORK_INTERFACE_NAME
+
+# Kiểm tra hệ thống có sử dụng YUM hay không
+YUM=$(which yum)
+
+if [ "$YUM" ]; then
+    echo > /etc/sysctl.conf
+    tee -a /etc/sysctl.conf <<EOF
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv6.conf.all.disable_ipv6 = 0
+EOF
+    sysctl -p
+
+    interfaces=$(ip -o link show | awk -F': ' '{print $2}')
+    IPC=$(curl -4 -s icanhazip.com | cut -d"." -f3)
+    IPD=$(curl -4 -s icanhazip.com | cut -d"." -f4)
+    for iface in $interfaces; do
+        if [ $IPC == 4 ]; then
+            tee -a /etc/sysconfig/network-scripts/ifcfg-$iface <<-EOF
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=2403:6a40:0:40::$IPD:0000/64
+IPV6_DEFAULTGW=2403:6a40:0:40::1
+EOF
+        elif [ $IPC == 5 ]; then
+            tee -a /etc/sysconfig/network-scripts/ifcfg-$iface <<-EOF
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=2403:6a40:0:41::$IPD:0000/64
+IPV6_DEFAULTGW=2403:6a40:0:41::1
+EOF
+        elif [ $IPC == 244 ]; then
+            tee -a /etc/sysconfig/network-scripts/ifcfg-$iface <<-EOF
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=2403:6a40:2000:244::$IPD:0000/64
+IPV6_DEFAULTGW=2403:6a40:2000:244::1
+EOF
+        else
+            tee -a /etc/sysconfig/network-scripts/ifcfg-$iface <<-EOF
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=2403:6a40:0:$IPC::$IPD:0000/64
+IPV6_DEFAULTGW=2403:6a40:0:$IPC::1
+EOF
+        fi
+    done
+
+    service network restart
+
+# Nếu không sử dụng YUM thì kiểm tra sử dụng apt (Ubuntu)
+else
+    ipv4=$(curl -4 -s icanhazip.com)
+    IPC=$(curl -4 -s icanhazip.com | cut -d"." -f3)
+    IPD=$(curl -4 -s icanhazip.com | cut -d"." -f4)
+    INT=$(ls /sys/class/net | grep e)
+    if [ "$IPC" = "4" ]; then
+        IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:40::1"
+    elif [ "$IPC" = "5" ]; then
+        IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:41::1"
+    elif [ "$IPC" = "244" ]; then
+        IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+        GATEWAY="2403:6a40:2000:244::1"
+    else
+        IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:$IPC::1"
+    fi
+    interface_name="$INT"  # Tên giao diện mạng
+    ipv6_address="$IPV6_ADDRESS"
+    gateway6_address="$GATEWAY"
+    netplan_path="/etc/netplan/50-cloud-init.yaml"  # Đường dẫn tập tin cấu hình Netplan
+
+    netplan_config=$(cat "$netplan_path")
+    new_netplan_config=$(sed "/gateway4:/i \ \ \ \ \ \ \ \ \ \ \ \ - $ipv6_address" <<< "$netplan_config")
+    new_netplan_config=$(sed "/gateway4:.*/a \ \ \ \ \ \ \ \ \ \ \ \ gateway6: $gateway6_address" <<< "$new_netplan_config")
+
+    echo "$new_netplan_config" > "$netplan_path"
+
+    sudo netplan apply
+fi
+
+echo 'IPv6 đã được cấu hình thành công!'
+
+auto_detect_interface() {
+    IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+}
+
+# Function to generate IPv6 addresses and configure iptables
+gen_ipv6_64() {
+    rm $WORKDIR/ipv6.txt
+    count_ipv6=1
+    while [ "$count_ipv6" -le $MAXCOUNT ]; do
+        array=( 1 2 3 4 5 6 7 8 9 0 a b c d e f )
+        ip64() {
+            echo "${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}${array[$RANDOM % 16]}"
+        }
+        echo $IP6:$(ip64):$(ip64):$(ip64):$(ip64) >> $WORKDIR/ipv6.txt
+        let "count_ipv6 += 1"
+    done
+}
+
+# Function to install and configure 3proxy
+install_3proxy() {
+    echo "Installing 3proxy..."
+    sudo yum install gcc make nano git -y
+    git clone https://github.com/z3apa3a/3proxy
+    cd 3proxy
+    ln -s Makefile.Linux Makefile
+    make
+    sudo make install
+    systemctl daemon-reload
+    echo "* hard nofile 999999" >> /etc/security/limits.conf
+    echo "* soft nofile 999999" >> /etc/security/limits.conf
+    systemctl stop firewalld
+    systemctl disable firewalld
+    ulimit -n 65535
+    chkconfig 3proxy on
+    cd $WORKDIR
+}
+
+# Function to generate 3proxy configuration
+gen_3proxy_cfg() {
+    echo "daemon"
+    echo "maxconn 10000"
+    echo "nserver 1.1.1.1"
+    echo "nserver [2606:4700:4700::1111]"
+    echo "nserver [2606:4700:4700::1001]"
+    echo "nserver [2001:4860:4860::8888]"
+    echo "nscache 65536"
+    echo "timeouts 1 5 30 60 180 1800 15 60"
+    echo "setgid 65535"
+    echo "setuid 65535"
+    echo "stacksize 6291456"
+    echo "flush"
+    echo "auth none"
+    echo "allow 127.0.0.1"
+
+    port=$START_PORT
+    while read ip; do
+        echo "proxy -6 -n -a -p$port -i$IP4 -e$ip"
+        ((port+=1))
+    done < $WORKDIR/ipv6.txt
+}
+
+# Function to generate ifconfig commands for IPv6
+gen_ifconfig() {
+    while read line; do
+        echo "ifconfig $IFCFG inet6 add $line/64"
+    done < $WORKDIR/ipv6.txt
+}
+
+# Function to export configuration to text file
+export_txt() {
+    port=$START_PORT
+    for ((i=1; i<=$MAXCOUNT; i++)); do
+        echo "$IP4:$port"
+        ((port+=1))
+    done < $WORKDIR/ipv4.txt
+}
+
+# Main script starts here
+if [ "x$(id -u)" != 'x0' ]; then
+    echo 'Error: this script can only be executed by root'
+    exit 1
+fi
+
+# Main variables
+mkdir -p /home/proxy/
+chmod -R 777 /home/proxy/
+install_3proxy
+service network restart
+systemctl stop firewalld
+ulimit -n 65535
+yum -y install gcc net-tools bsdtar zip psmisc wget >/dev/null
+
+# Check and retrieve IPv4 and IPv6 addresses
+if ping6 -c3 icanhazip.com &> /dev/null; then
+    IP4=$(curl -4 -s icanhazip.com)
+    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+    main_interface=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
+
+    echo "[OKE]: Thành công"
+    echo "IPV4: $IP4"
+    echo "IPV6: $IP6"
+    echo "Mạng chính: $main_interface"
+else
+    echo "[ERROR]: Thất bại!"
+    exit 1
+fi
+
+IFCFG="$main_interface"
+WORKDIR="/home/proxy"
+START_PORT=10000
+MAXCOUNT=2000
+
+# Generate IPv6 addresses and configurations
+echo "Đang tạo $MAXCOUNT IPV6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > $WORKDIR/boot_ifconfig.sh
+
+# Setup 3proxy and iptables
+systemctl disable --now firewalld
+service iptables stop
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+killall 3proxy
+service 3proxy start
+
+# Export configuration to text file
+echo "Export $IP4.txt"
+export_txt > $WORKDIR/$IP4.txt
+
+# Function to upload proxy text file
+upload_proxy() {
+    cd $WORKDIR || exit 1
+    curl -F "ipv4.txt" https://transfer.sh
+}
+
+# Function to generate rotation script
+gen_xoay() {
+    cat <<EOF > xoay.sh
+#!/usr/bin/bash
+echo "Đang tạo $MAXCOUNT IPV6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > $WORKDIR/boot_ifconfig.sh
+echo "3proxy Start"
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+killall 3proxy
+service 3proxy start
+echo "Đã Reset IP"
+EOF
+    mv xoay.sh /home/proxy/
+    chmod -R 777 /home/proxy/
+}
+gen_xoay
+
+echo "Tạo cấu hình xoay.sh"
+echo "1.sh done"
+
+# Tạo file cấu hình cho dịch vụ 3proxy
+echo "[Unit]
+Description=3proxy Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
+Restart=always
+RestartSec=5   # Thời gian chờ giữa các lần khởi động lại (tùy chọn)
+ExecStop=/bin/kill -SIGINT $MAINPID   # Lệnh dừng dịch vụ 3proxy
+
+[Install]
+WantedBy=multi-user.target" | sudo tee /etc/systemd/system/3proxy.service
+
+# Tải lại systemctl
+systemctl daemon-reload
+
+# Bật dịch vụ 3proxy và cài đặt tự động khởi động cùng hệ thống
+systemctl enable 3proxy
+systemctl start 3proxy
+
+# Cấu hình tối ưu hệ thống cho 3proxy
+echo "fs.file-max = 1000000" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv4.ip_local_port_range = 1024 65000" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv4.tcp_fin_timeout = 30" | sudo tee -a /etc/sysctl.conf
+echo "net.core.somaxconn = 4096" | sudo tee -a /etc/sysctl.conf
+echo "net.core.netdev_max_backlog = 4096" | sudo tee -a /etc/sysctl.conf
+
+# Giới hạn file descriptor
+echo "* hard nofile 999999" | sudo tee -a /etc/security/limits.conf
+echo "* soft nofile 999999" | sudo tee -a /etc/security/limits.conf
+
+# Đặt mô tả cho 3proxy
+sudo sed -i "/Description=/c\Description=3 Proxy optimized by VLT PRO" /etc/sysctl.conf
+
+# Thiết lập giới hạn file descriptor và process
+sudo sed -i "/LimitNOFILE=/c\LimitNOFILE=9999999" /etc/sysctl.conf
+sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
+
+sudo sysctl -p
+
+echo "Tổng số IPv6 hiện tại:"
+ip -6 addr | grep inet6 | wc -l
+upload_proxy
