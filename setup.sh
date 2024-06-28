@@ -139,18 +139,18 @@ MAXCOUNT=2000
 mkdir -p "$WORKDIR"
 chmod -R 777 "$WORKDIR"
 auto_detect_interface
+yum -y install gcc net-tools bsdtar zip psmisc wget >/dev/null
 
-# Kiểm tra và lấy địa chỉ IPv4 và IPv6
-if ping4 -c3 icanhazip.com &> /dev/null; then
-    IP4=$(curl -s ifconfig.me)
+# Check and retrieve IPv4 and IPv6 addresses
+if ping6 -c3 icanhazip.com &> /dev/null; then
+    IP4=$(curl -4 -s icanhazip.com)
     IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
-    main_interface=$(ip route get 8.8.8.8 | awk '{print $5}')
+    main_interface=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
+
     echo "[OKE]: Thành công"
-    echo "IPv4: $IP4"
-    echo "IPv6: $IP6"
-    echo "Giao diện mạng chính: $main_interface"
-    echo "Cổng proxy: $START_PORT"
-    echo "Số Lượng Tạo: $MAXCOUNT"
+    echo "IPV4: $IP4"
+    echo "IPV6: $IP6"
+    echo "Mạng chính: $main_interface"
 else
     echo "[ERROR]: Thất bại!"
     exit 1
