@@ -124,10 +124,10 @@ mkdir -p "$WORKDIR"
 chmod -R 777 "$WORKDIR"
 auto_detect_interface
 
-
-
+# Kiểm tra và lấy địa chỉ IPv4 và IPv6
+if ping -4 icanhazip.com &> /dev/null; then
     IP4=$(curl -4 -s icanhazip.com)
-    IP6=$(ip addr show dev ${IFCFG} | sed -e's/^.*inet6 \([^ ]*\)\/.*$/\1/;t;d' | head -1| cut -f1-4 -d':')
+    IP6=$(ip addr show dev "${IFCFG}" | sed -e's/^.*inet6 \([^ ]*\)\/.*$/\1/;t;d' | head -1 | cut -f1-4 -d':')
     echo "[OKE]: Thành công"
     echo "IPv4: ${IP4}"
     echo "IPv6: ${IP6}"
@@ -138,8 +138,6 @@ else
     echo "[ERROR]: Thất bại!"
     exit 1
 fi
-
-IFCFG="$main_interface"
 
 # Tạo địa chỉ IPv6 và cấu hình
 echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
@@ -212,8 +210,9 @@ SysVStartPriority=99
 WantedBy=multi-user.target
 EOF
 
-# Create rc.local file if it doesn't exist
-cat <<EOF >/etc/rc.local
+Create rc.local file if it doesn’t exist
+
+cat </etc/rc.local
 #!/bin/bash
 systemctl start NetworkManager.service
 killall 3proxy
@@ -223,11 +222,12 @@ ulimit -n 65535
 /usr/local/bin/3proxy /etc/3proxy/3proxy.cfg &
 EOF
 
-# Đảm bảo script khởi động cùng hệ thống
+Đảm bảo script khởi động cùng hệ thống
+
 chmod +x /etc/rc.local
 bash /etc/rc.local
 
-echo "Starting Proxy"
+echo “Starting Proxy”
 
-echo "Tổng số IPv6 hiện tại:"
+echo “Tổng số IPv6 hiện tại:”
 ip -6 addr | grep inet6 | wc -l
