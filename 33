@@ -224,9 +224,12 @@ gen_ipv6_64
 install_3proxy
 gen_3proxy_cfg
 export_txt > $WORKDIR/proxy.txt
-upload_proxy
 xoay_proxy
 xoay_proxy1
 xoay_proxy2
 gen_xoay
 crontab_config
+
+echo "Tổng số IPv6 hiện tại:"
+ip -6 addr | grep inet6 | wc -l
+upload_proxy
