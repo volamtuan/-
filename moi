@@ -1,7 +1,15 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-#!/bin/bash
+xoa_ipv6() {
+    echo "Xoá Tất Cả IPv6..."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
+}
+
+# Gọi hàm xoá IPv6
+xoa_ipv6
+
 
 # Cài đặt các gói cần thiết
 yum install make wget curl jq git iptables-services -y
