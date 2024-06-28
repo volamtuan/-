@@ -38,15 +38,15 @@ gen_ipv6_64() {
 
 # Cài đặt và cấu hình 3proxy
 install_3proxy() {
-    echo "Đang cài đặt 3proxy..."
-    git clone https://github.com/z3apa3a/3proxy
-    cd 3proxy || exit 1
-    ln -s Makefile.Linux Makefile >/dev/null 2>&1
-    make >/dev/null 2>&1
-    sudo make install >/dev/null 2>&1
-    cd "$WORKDIR" || exit 1
-    sudo cp -R 3proxy/scripts/init.d/3proxy /etc/init.d/
-    sudo chmod +x /etc/init.d/3proxy
+    echo "Installing 3proxy..."
+    URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
+    wget -qO- $URL | tar xz >/dev/null 2>&1
+    cd 3proxy-0.9.4
+    make -f Makefile.Linux >/dev/null 2>&1
+    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
+    cp src/3proxy /usr/local/etc/3proxy/bin/
+    cd $WORKDIR
+    rm -rf 3proxy-0.9.4
     chkconfig 3proxy on
     service 3proxy start
     systemctl stop firewalld
