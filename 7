@@ -209,7 +209,7 @@ fi
 
 # Các biến chính
 WORKDIR="/home/proxy"
-MAXCOUNT="{MAXCOUNT}"  # Thay thế bằng số lượng IPv6 cần tạo
+MAXCOUNT="2000"  # Thay thế bằng số lượng IPv6 cần tạo
 mkdir -p "$WORKDIR"
 chmod -R 777 "$WORKDIR"
 auto_detect_interface
@@ -264,9 +264,6 @@ EOF
 gen_xoay
 
 echo "Cấu hình Xoay thành công"
-
-# Tự động khởi động 3proxy khi khởi động hệ thống
-chmod +x "$WORKDIR/boot_*.sh" /etc/rc.local
 
 cat >>/etc/rc.local <<EOF
 #!/bin/bash
