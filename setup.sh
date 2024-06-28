@@ -3,16 +3,19 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 # Thiết lập IPv6
 setup_ipv6() {
-    echo "Xoá IPv6 & Setup IPv6 New..."
+    echo "Thiết lập IPv6..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
     bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
-    echo "Cài đặt các gói cần thiết..."
-    yum -y install curl wget git gcc net-tools iptables tar zip
-    systemctl stop firewalld
-    systemctl disable firewalld
 }
 setup_ipv6
+
+echo "Cài App Cần Thiết..."
+if [[ -f /usr/bin/apt-get ]]; then
+    sudo apt-get install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
+elif [[ -f /usr/bin/yum ]]; then
+    sudo yum install make wget curl jq git iptables-services gcc nano -y >/dev/null 2>&1
+fi
 
 # Tự động phát hiện giao diện mạng
 auto_detect_interface() {
@@ -21,7 +24,7 @@ auto_detect_interface() {
 
 # Tạo địa chỉ IPv6 và cấu hình iptables
 gen_ipv6_64() {
-    rm "$WORKDIR/ipv6.txt" 2>/dev/null || true
+    rm -f "$WORKDIR/ipv6.txt"
     count_ipv6=1
     while [ "$count_ipv6" -le "$MAXCOUNT" ]; do
         array=( 1 2 3 4 5 6 7 8 9 0 a b c d e f )
@@ -107,51 +110,6 @@ export_txt() {
     done
 }
 
-# Kiểm tra quyền root và khởi động chính script
-if [ "$(id -u)" != '0' ]; then
-    echo 'Lỗi: Script này cần chạy với quyền root'
-    exit 1
-fi
-
-# Các biến chính
-WORKDIR="/home/proxy"
-START_PORT=10000
-MAXCOUNT=2000
-mkdir -p "$WORKDIR"
-chmod -R 777 "$WORKDIR"
-auto_detect_interface
-
-# Kiểm tra và lấy địa chỉ IPv4 và IPv6
-if ping -4 icanhazip.com &> /dev/null; then
-    IP4=$(curl -4 -s icanhazip.com)
-    IP6=$(ip addr show dev "${IFCFG}" | sed -e's/^.*inet6 \([^ ]*\)\/.*$/\1/;t;d' | head -1 | cut -f1-4 -d':')
-    echo "[OKE]: Thành công"
-    echo "IPv4: ${IP4}"
-    echo "IPv6: ${IP6}"
-    echo "Giao diện mạng chính: ${IFCFG}"
-    echo "Cổng proxy: $START_PORT"
-    echo "Số Lượng Tạo: $MAXCOUNT"
-else
-    echo "[ERROR]: Thất bại!"
-    exit 1
-fi
-
-# Tạo địa chỉ IPv6 và cấu hình
-echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
-gen_ipv6_64
-echo "Đang tạo IPV6 gen_ifconfig.sh"
-gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
-chmod +x "$WORKDIR/boot_ifconfig.sh"
-
-# Cài đặt 3proxy và cấu hình
-install_3proxy
-gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
-service 3proxy restart
-
-# Xuất cấu hình ra tập tin văn bản
-echo "Xuất $IP4.txt"
-export_txt > "$WORKDIR/$IP4.txt"
-
 # Tạo script xoay để cập nhật địa chỉ IPv6
 gen_xoay() {
     cat <<EOF > "$WORKDIR/xoay.sh"
@@ -167,6 +125,55 @@ echo "Đã đặt lại địa chỉ IP"
 EOF
     chmod +x "$WORKDIR/xoay.sh"
 }
+
+# Kiểm tra quyền root và khởi động chính script
+if [ "$(id -u)" != '0' ]; then
+    echo 'Lỗi: Script này cần chạy với quyền root'
+    exit 1
+fi
+
+# Các biến chính
+WORKDIR="/home/proxy"
+START_PORT=10000
+MAXCOUNT=2000
+mkdir -p "$WORKDIR"
+chmod -R 777 "$WORKDIR"
+auto_detect_interface
+
+# Kiểm tra và lấy địa chỉ IPv4 và IPv6
+if ping4 -c3 icanhazip.com &> /dev/null; then
+    IP4=$(curl -s ifconfig.me)
+    IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+    main_interface=$(ip route get 8.8.8.8 | awk '{print $5}')
+    echo "[OKE]: Thành công"
+    echo "IPv4: $IP4"
+    echo "IPv6: $IP6"
+    echo "Giao diện mạng chính: $main_interface"
+    echo "Cổng proxy: $START_PORT"
+    echo "Số Lượng Tạo: $MAXCOUNT"
+else
+    echo "[ERROR]: Thất bại!"
+    exit 1
+fi
+
+IFCFG="$main_interface"
+
+# Tạo địa chỉ IPv6 và cấu hình
+echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
+
+# Cài đặt 3proxy và cấu hình
+install_3proxy
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+
+# Xuất cấu hình ra tập tin văn bản
+echo "Xuất $IP4.txt"
+export_txt > "$WORKDIR/$IP4.txt"
+
+# Tạo script xoay để cập nhật địa chỉ IPv6
 gen_xoay
 
 echo "Cấu hình Xoay thành công"
