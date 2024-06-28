@@ -1,0 +1,84 @@
+    echo 'Lỗi: Script này cần chạy với quyền root'
+    exit 1
+fi
+
+# Các biến chính
+WORKDIR="/home/proxy"
+START_PORT=10000
+MAXCOUNT=2000
+mkdir -p "$WORKDIR"
+chmod -R 777 "$WORKDIR"
+auto_detect_interface
+
+# Kiểm tra và lấy địa chỉ IPv4 và IPv6
+if ping -4 icanhazip.com &> /dev/null; then
+IP4=$(curl -4 -s icanhazip.com)
+IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
+main_interface=$(ip route get 8.8.8.8 | awk '{print $5}')
+echo "[OKE]: Thành công"
+echo "IPv4: $IP4"
+echo "IPv6: $IP6"
+echo "Giao diện mạng chính: $main_interface"
+echo "Cổng proxy: $START_PORT"
+echo "Số Lượng Tạo: $MAXCOUNT"
+else
+    echo "[ERROR]: Thất bại!"
+    exit 1
+fi
+
+IFCFG="$main_interface"
+
+# Tạo địa chỉ IPv6 và cấu hình
+echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
+chmod +x boot_*.sh /etc/rc.local
+
+# Cài đặt 3proxy và cấu hình
+install_3proxy
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+
+# Xuất cấu hình ra tập tin văn bản
+echo "Xuất $IP4.txt"
+export_txt > "$WORKDIR/$IP4.txt"
+
+# Tạo script xoay để cập nhật địa chỉ IPv6
+gen_xoay() {
+    cat <<EOF > "$WORKDIR/xoay.sh"
+#!/bin/bash
+echo "Đang tạo $MAXCOUNT IPv6 > ipv6.txt"
+gen_ipv6_64
+echo "Đang tạo IPV6 gen_ifconfig.sh"
+gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
+echo "Khởi động lại 3proxy"
+gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+service 3proxy restart
+echo "Đã đặt lại địa chỉ IP"
+EOF
+    chmod +x "$WORKDIR/xoay.sh"
+}
+gen_xoay
+
+echo "Cấu hình Xoay thành công"
+
+cat <<EOF > /etc/rc.local
+#!/bin/bash
+systemctl start NetworkManager.service
+killall 3proxy
+service 3proxy start
+bash ${WORKDIR}/boot_ifconfig.sh
+ulimit -n 65535
+/usr/local/bin/3proxy /etc/3proxy/3proxy.cfg &
+EOF
+
+# Đảm bảo script khởi động cùng hệ thống
+chmod +x /etc/rc.local
+bash /etc/rc.local
+
+echo "Starting Proxy"
+
+echo "Tổng số IPv6 hiện tại:"
+ip -6 addr | grep inet6 | wc -l
+
