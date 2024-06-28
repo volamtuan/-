@@ -178,60 +178,21 @@ gen_xoay
 
 echo "Cấu hình Xoay thành công"
 
-cat <<EOF >/etc/systemd/system/3proxy.service
-[Unit]
-Description=3proxy Proxy Server
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
-ExecReload=/bin/kill -HUP \$MAINPID
-ExecStop=/bin/kill -TERM \$MAINPID
-Restart=always
-RestartSec=5
-LimitNOFILE=1000000
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Create rc.local service file if it doesn't exist
-cat <<EOF >/etc/systemd/system/rc-local.service
-[Unit]
-Description=/etc/rc.local Compatibility
-ConditionPathExists=/etc/rc.local
-
-[Service]
-Type=forking
-ExecStart=/etc/rc.local start
-TimeoutSec=0
-StandardOutput=tty
-RemainAfterExit=yes
-SysVStartPriority=99
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-Create rc.local file if it doesn’t exist
-
-cat </etc/rc.local
+cat <<EOF >/etc/rc.local
 #!/bin/bash
 systemctl start NetworkManager.service
 killall 3proxy
 service 3proxy start
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 65535
-/usr/local/bin/3proxy /etc/3proxy/3proxy.cfg &
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy.cfg &
 EOF
 
-Đảm bảo script khởi động cùng hệ thống
-
+# Đảm bảo script khởi động cùng hệ thống
 chmod +x /etc/rc.local
 bash /etc/rc.local
 
-echo “Starting Proxy”
+echo "Reset khởi động 3proxy..."
 
-echo “Tổng số IPv6 hiện tại:”
+echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
