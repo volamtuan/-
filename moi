@@ -255,9 +255,6 @@ gen_xoay
 
 echo "Cấu hình Xoay thành công"
 
-# Tự động khởi động 3proxy khi khởi động hệ thống
-chmod +x "$WORKDIR/boot_*.sh" /etc/rc.local
-
 cat >>/etc/rc.local <<EOF
 #!/bin/bash
 systemctl start NetworkManager.service
