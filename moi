@@ -313,11 +313,6 @@ sudo sed -i "/LimitNPROC=/c\LimitNPROC=9999999" /etc/sysctl.conf
 
 sudo sysctl -p
 
-# Thêm log cho script và 3proxy
-exec > >(tee -a /home/proxy/setup_proxy.log) 2>&1
-log /home/proxy/3proxy.log D
-
-
 echo "Tổng số IPv6 hiện tại:"
 ip -6 addr | grep inet6 | wc -l
 upload_proxy
