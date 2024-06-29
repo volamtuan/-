@@ -1,0 +1,65 @@
+#!/bin/bash
+
+# Cập nhật hệ thống và cài đặt các gói cần thiết
+sudo yum update -y
+sudo yum install -y epel-release
+sudo yum install -y httpd php php-mysqlnd php-fpm mariadb-server wget rsync firewalld
+
+# Khởi động và kích hoạt các dịch vụ
+sudo systemctl start httpd
+sudo systemctl start mariadb
+sudo systemctl enable httpd
+sudo systemctl enable mariadb
+
+# Cấu hình tường lửa firewalld
+sudo firewall-cmd --permanent --zone=public --add-service=http
+sudo firewall-cmd --permanent --zone=public --add-service=https
+sudo firewall-cmd --reload
+
+# Cài đặt và cấu hình MariaDB
+sudo mysql_secure_installation <<EOF
+
+y
+password
+password
+y
+y
+y
+y
+EOF
+
+# Tạo database và user trong MariaDB
+DB_NAME="wordpress"
+DB_USER="wordpress"
+DB_PASSWORD="wordpress"
+
+sudo mysql -e "CREATE DATABASE $DB_NAME;"
+sudo mysql -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASSWORD';"
+sudo mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
+sudo mysql -e "FLUSH PRIVILEGES;"
+
+# Tải và giải nén WordPress
+cd /tmp
+wget https://wordpress.org/latest.tar.gz
+tar -zxvf latest.tar.gz
+
+# Di chuyển WordPress đến thư mục web
+sudo rsync -avP wordpress/ /var/www/html/
+
+# Cấu hình permissions và SELinux (nếu có)
+sudo chown -R apache:apache /var/www/html/
+sudo chmod -R 755 /var/www/html/
+
+# Cấu hình Apache
+sudo cp /etc/httpd/conf/httpd.conf /etc/httpd/conf/httpd.conf.bak
+sudo sed -i 's/AllowOverride None/AllowOverride All/' /etc/httpd/conf/httpd.conf
+sudo systemctl restart httpd
+
+# Tạo file cấu hình wp-config.php từ mẫu
+cd /var/www/html/
+sudo cp wp-config-sample.php wp-config.php
+sudo sed -i "s/database_name_here/$DB_NAME/" wp-config.php
+sudo sed -i "s/username_here/$DB_USER/" wp-config.php
+sudo sed -i "s/password_here/$DB_PASSWORD/" wp-config.php
+
+echo "Cài đặt và cấu hình WordPress hoàn tất. Truy cập http://your_server_ip để hoàn tất quá trình cài đặt."
