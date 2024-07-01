@@ -8,6 +8,7 @@ get_network_info() {
     IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
     GATEWAY4=$(ip route | grep default | awk '{print $3}')
     GATEWAY6=$(ip -6 route | grep default | awk '{print $3}')
+    ip -6 addr flush dev $INTERFACE
 }
 
 # Hàm cấu hình IP tĩnh cho Ubuntu
