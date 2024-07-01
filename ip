@@ -62,99 +62,12 @@ DNS2=8.8.4.4
 EOF"
 
     # Khởi động lại dịch vụ mạng để áp dụng thay đổi
-    sudo systemctl restart network
+    systemctl restart network
 
     echo "Cấu hình IP tĩnh trên CentOS hoàn tất."
 }
 
-# Hàm cấu hình IPv6 động
-configure_ipv6_dynamic() {
-    echo "Đang cấu hình IPv6 động..."
-
-    # Lấy địa chỉ IPv6
-    ipv6_address=$(ip addr show $INTERFACE | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
-
-    if [ -n "$ipv6_address" ]; then
-        echo "Địa chỉ IPv6 đã lấy được: $ipv6_address"
-
-        # Khai báo các mảng kết hợp để lưu trữ địa chỉ IPv6 và gateway
-        declare -A ipv6_addresses=(
-            [4]="2001:ee0:4f9b::$IPD:0000/64"
-            [5]="2001:ee0:4f9b::$IPD:0000/64"
-            [244]="2001:ee0:4f9b::$IPD:0000/64"
-            ["default"]="2001:ee0:4f9b::$IPC::$IPD:0000/64"
-        )
-
-        declare -A gateways=(
-            [4]="2001:ee0:4f9b:$IPC::1"
-            [5]="2001:ee0:4f9b:$IPC::1"
-            [244]="2001:ee0:4f9b:$IPC::1"
-            ["default"]="2001:ee0:4f9b:$IPC::1"
-        )
-
-        # Lấy giá trị thứ ba và thứ tư của IPv4
-        IPC=$(echo "$ipv6_address" | cut -d":" -f5)
-        IPD=$(echo "$ipv6_address" | cut -d":" -f6)
-
-        # Đặt địa chỉ IPv6 và gateway dựa trên giá trị thứ ba của IPv4
-        IPV6_ADDRESS="${ipv6_addresses[$IPC]}"
-        GATEWAY="${gateways[$IPC]}"
-
-        echo "Đang cấu hình giao diện: $INTERFACE"
-        echo "IPV6_ADDR_GEN_MODE=stable-privacy" >> /etc/network/interfaces
-        echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
-        echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
-
-        # Khởi động lại dịch vụ mạng để áp dụng thay đổi
-        service networking restart
-        systemctl restart NetworkManager.service
-        ifconfig "$INTERFACE"
-        echo "Cấu hình IPv6 động hoàn tất!"
-    else
-        echo "Không lấy được địa chỉ IPv6."
-    fi
-}
-
 # Cấu hình firewall cho Ubuntu
-configure_firewall_ubuntu() {
-    echo "Cấu hình firewall cho Ubuntu..."
-
-    sudo ufw allow in on $INTERFACE from any to any proto tcp
-    sudo ufw allow in on $INTERFACE from any to any proto udp
-    sudo ufw reload
-
-    echo "Cấu hình firewall cho Ubuntu hoàn tất."
-}
-
-# Cấu hình firewall cho CentOS
-configure_firewall_centos() {
-    echo "Cấu hình firewall cho CentOS..."
-
-    sudo firewall-cmd --zone=public --add-source="$IP4" --permanent
-    sudo firewall-cmd --reload
-
-    sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv6" source address="::/0" accept'
-    sudo firewall-cmd --reload
-
-    sudo firewall-cmd --zone=public --add-port=0-65535/tcp --permanent
-    sudo firewall-cmd --reload
-
-    echo "Cấu hình firewall cho CentOS hoàn tất."
-}
-
-# Cấu hình iptables NAT cho CentOS
-configure_iptables_centos() {
-    echo "Cấu hình iptables NAT cho CentOS..."
-
-    sudo iptables -t nat -A PREROUTING -p tcp -d $IP4 --dport 0-65535 -j DNAT --to-destination $IP4
-    sudo iptables -t nat -A POSTROUTING -p tcp -d $IP4 --dport 0-65535 -j SNAT --to-source $IP4
-
-    sudo sh -c "iptables-save > /etc/iptables.rules"
-    sudo iptables-restore < /etc/iptables.rules
-
-    echo "Cấu hình iptables NAT cho CentOS hoàn tất."
-}
-
 configure_firewall_ubuntu() {
     echo "Cấu hình firewall cho Ubuntu..."
 
@@ -194,7 +107,7 @@ configure_iptables_centos() {
     echo "Cấu hình iptables cho CentOS hoàn tất."
 }
 
-# Cấu hình masquerade để cho phép NAT
+# Hàm cấu hình masquerade để cho phép NAT
 configure_masquerade() {
     echo "Đang cấu hình masquerade..."
 
@@ -209,15 +122,14 @@ if [ -f /etc/lsb-release ]; then
     # Ubuntu
     get_network_info
     configure_ubuntu
-    configure_ipv6_dynamic
     configure_firewall_ubuntu
 elif [ -f /etc/centos-release ]; then
     # CentOS
     get_network_info
     configure_centos
-    configure_ipv6_dynamic
     configure_firewall_centos
     configure_iptables_centos
+    configure_masquerade  # Thêm cấu hình masquerade cho CentOS
 else
     echo "Hệ điều hành không được hỗ trợ bởi script này."
     exit 1
