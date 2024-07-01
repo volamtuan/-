@@ -2,23 +2,10 @@
 
 # Lấy thông tin giao diện mạng và địa chỉ IP hiện tại
 get_network_info() {
-    echo "Đang lấy thông tin giao diện mạng và địa chỉ IP..."
+    echo "Hiện tại đang kiểm tra giao diện mạng và địa chỉ IP..."
     route -n
     ifconfig
 
-    # Lấy danh sách các card mạng (không bao gồm loopback, virtual và các card không có số)
-    INTERFACES=($(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2}'))
-
-    # Xoá tất cả các địa chỉ IPv6 trên các card mạng
-    for INTERFACE in "${INTERFACES[@]}"; do
-        sudo ip -6 addr flush dev $INTERFACE
-    done
-
-    # Lấy thông tin giao diện mạng sau khi xoá IPv6
-    route -n
-    ifconfig
-
-    # Lấy thông tin lại sau khi xoá IPv6
     INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
     IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
     IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
@@ -30,8 +17,8 @@ get_network_info() {
 configure_ubuntu() {
     echo "Đang cấu hình IP tĩnh cho Ubuntu..."
 
-    # Kiểm tra và cài đặt các gói cần thiết trên Ubuntu
-    check_and_install_ubuntu
+    # Cài đặt Network Manager nếu chưa có
+    sudo apt install -y network-manager
 
     # Tạo hoặc chỉnh sửa tệp cấu hình Netplan
     sudo bash -c "cat > /etc/netplan/00-installer-config.yaml <<EOF
@@ -62,9 +49,6 @@ EOF"
 configure_centos() {
     echo "Đang cấu hình IP tĩnh cho CentOS..."
 
-    # Kiểm tra và cài đặt các gói cần thiết trên CentOS
-    check_and_install_centos
-
     # Tạo hoặc chỉnh sửa tệp cấu hình mạng cho giao diện eth0
     sudo bash -c "cat > /etc/sysconfig/network-scripts/ifcfg-$INTERFACE <<EOF
 TYPE=Ethernet
@@ -86,48 +70,159 @@ EOF"
     echo "Cấu hình IP tĩnh trên CentOS hoàn tất."
 }
 
-# Kiểm tra và cài đặt các gói cần thiết trên Ubuntu
-check_and_install_ubuntu() {
-    echo "Kiểm tra và cài đặt các gói cần thiết trên Ubuntu..."
+# Hàm cấu hình IPv6 động
+configure_ipv6_dynamic() {
+    echo "Đang cấu hình IPv6 động..."
 
-    if ! command -v netplan &> /dev/null; then
-        sudo apt update
-        sudo apt install -y netplan
-    fi
+    # Lấy địa chỉ IPv6
+    ipv6_address=$(ip addr show $INTERFACE | awk '/inet6/{print $2}' | grep -v '^fe80' | head -n1)
 
-    echo "Các gói cần thiết đã được cài đặt trên Ubuntu."
-}
+    if [ -n "$ipv6_address" ]; then
+        echo "Địa chỉ IPv6 đã lấy được: $ipv6_address"
 
-# Kiểm tra và cài đặt các gói cần thiết trên CentOS
-check_and_install_centos() {
-    echo "Kiểm tra và cài đặt các gói cần thiết trên CentOS..."
+        # Khai báo các mảng kết hợp để lưu trữ địa chỉ IPv6 và gateway
+        declare -A ipv6_addresses=(
+            [4]="2001:ee0:4f9b::$IPD:0000/64"
+            [5]="2001:ee0:4f9b::$IPD:0000/64"
+            [244]="2001:ee0:4f9b::$IPD:0000/64"
+            ["default"]="2001:ee0:4f9b::$IPC::$IPD:0000/64"
+        )
 
-    if ! command -v firewalld &> /dev/null; then
-        sudo yum install -y firewalld
-        sudo systemctl enable firewalld
-        sudo systemctl start firewalld
-    fi
+        declare -A gateways=(
+            [4]="2001:ee0:4f9b:$IPC::1"
+            [5]="2001:ee0:4f9b:$IPC::1"
+            [244]="2001:ee0:4f9b:$IPC::1"
+            ["default"]="2001:ee0:4f9b:$IPC::1"
+        )
 
-    echo "Các gói cần thiết đã được cài đặt trên CentOS."
-}
+        # Lấy giá trị thứ ba và thứ tư của IPv4
+        IPC=$(echo "$ipv6_address" | cut -d":" -f5)
+        IPD=$(echo "$ipv6_address" | cut -d":" -f6)
 
-# Kiểm tra hệ điều hành và gọi hàm cấu hình phù hợp
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
-        # Ubuntu
-        get_network_info
-        configure_ubuntu
-    elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
-        # CentOS
-        get_network_info
-        configure_centos
+        # Đặt địa chỉ IPv6 và gateway dựa trên giá trị thứ ba của IPv4
+        IPV6_ADDRESS="${ipv6_addresses[$IPC]}"
+        GATEWAY="${gateways[$IPC]}"
+
+        echo "Đang cấu hình giao diện: $INTERFACE"
+        echo "IPV6_ADDR_GEN_MODE=stable-privacy" >> /etc/network/interfaces
+        echo "IPV6ADDR=$ipv6_address/64" >> /etc/network/interfaces
+        echo "IPV6_DEFAULTGW=$GATEWAY" >> /etc/network/interfaces
+
+        # Khởi động lại dịch vụ mạng để áp dụng thay đổi
+        service networking restart
+        systemctl restart NetworkManager.service
+        ifconfig "$INTERFACE"
+        echo "Cấu hình IPv6 động hoàn tất!"
     else
-        echo "Hệ điều hành không được hỗ trợ bởi script này."
-        exit 1
+        echo "Không lấy được địa chỉ IPv6."
     fi
+}
+
+# Cấu hình firewall cho Ubuntu
+configure_firewall_ubuntu() {
+    echo "Cấu hình firewall cho Ubuntu..."
+
+    sudo ufw allow in on $INTERFACE from any to any proto tcp
+    sudo ufw allow in on $INTERFACE from any to any proto udp
+    sudo ufw reload
+
+    echo "Cấu hình firewall cho Ubuntu hoàn tất."
+}
+
+# Cấu hình firewall cho CentOS
+configure_firewall_centos() {
+    echo "Cấu hình firewall cho CentOS..."
+
+    sudo firewall-cmd --zone=public --add-source="$IP4" --permanent
+    sudo firewall-cmd --reload
+
+    sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv6" source address="::/0" accept'
+    sudo firewall-cmd --reload
+
+    sudo firewall-cmd --zone=public --add-port=0-65535/tcp --permanent
+    sudo firewall-cmd --reload
+
+    echo "Cấu hình firewall cho CentOS hoàn tất."
+}
+
+# Cấu hình iptables NAT cho CentOS
+configure_iptables_centos() {
+    echo "Cấu hình iptables NAT cho CentOS..."
+
+    sudo iptables -t nat -A PREROUTING -p tcp -d $IP4 --dport 0-65535 -j DNAT --to-destination $IP4
+    sudo iptables -t nat -A POSTROUTING -p tcp -d $IP4 --dport 0-65535 -j SNAT --to-source $IP4
+
+    sudo sh -c "iptables-save > /etc/iptables.rules"
+    sudo iptables-restore < /etc/iptables.rules
+
+    echo "Cấu hình iptables NAT cho CentOS hoàn tất."
+}
+
+configure_firewall_ubuntu() {
+    echo "Cấu hình firewall cho Ubuntu..."
+
+    sudo ufw allow in on $INTERFACE from any to any proto tcp
+    sudo ufw allow in on $INTERFACE from any to any proto udp
+    sudo ufw reload
+
+    echo "Cấu hình firewall cho Ubuntu hoàn tất."
+}
+
+# Hàm cấu hình firewall cho CentOS
+configure_firewall_centos() {
+    echo "Đang cấu hình firewall cho CentOS..."
+
+    sudo firewall-cmd --zone=public --add-source="$IP4" --permanent
+    sudo firewall-cmd --reload
+
+    sudo firewall-cmd --permanent --add-rich-rule='rule family="ipv6" source address="::/0" accept'
+    sudo firewall-cmd --reload
+
+    sudo firewall-cmd --zone=public --add-port=0-65535/tcp --permanent
+    sudo firewall-cmd --reload
+
+    echo "Cấu hình firewall cho CentOS hoàn tất."
+}
+
+# Hàm cấu hình iptables cho CentOS
+configure_iptables_centos() {
+    echo "Cấu hình iptables cho CentOS..."
+
+    sudo iptables -t nat -A PREROUTING -p tcp -d $IP4 --dport 0-65535 -j DNAT --to-destination $IP4
+    sudo iptables -t nat -A POSTROUTING -p tcp -d $IP4 --dport 0-65535 -j SNAT --to-source $IP4
+
+    sudo sh -c "iptables-save > /etc/iptables.rules"
+    sudo iptables-restore < /etc/iptables.rules
+
+    echo "Cấu hình iptables cho CentOS hoàn tất."
+}
+
+# Cấu hình masquerade để cho phép NAT
+configure_masquerade() {
+    echo "Đang cấu hình masquerade..."
+
+    sudo firewall-cmd --add-masquerade --permanent
+    sudo firewall-cmd --reload
+
+    echo "Cấu hình masquerade hoàn tất."
+}
+
+# Kiểm tra hệ điều hành và gọi hàm phù hợp
+if [ -f /etc/lsb-release ]; then
+    # Ubuntu
+    get_network_info
+    configure_ubuntu
+    configure_ipv6_dynamic
+    configure_firewall_ubuntu
+elif [ -f /etc/centos-release ]; then
+    # CentOS
+    get_network_info
+    configure_centos
+    configure_ipv6_dynamic
+    configure_firewall_centos
+    configure_iptables_centos
 else
-    echo "Không tìm thấy tệp /etc/os-release."
+    echo "Hệ điều hành không được hỗ trợ bởi script này."
     exit 1
 fi
 
@@ -138,13 +233,10 @@ ping -6 -c 4 google.com
 
 # Khởi động lại dịch vụ mạng
 echo "Khởi động lại dịch vụ mạng..."
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
-        sudo systemctl restart network-manager
-    elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
-        sudo systemctl restart network
-    fi
+if [ -f /etc/lsb-release ]; then
+    sudo systemctl restart network-manager
+elif [ -f /etc/centos-release ]; then
+    sudo systemctl restart network
 fi
 
 echo "Cấu hình hoàn tất."
