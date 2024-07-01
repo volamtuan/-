@@ -167,6 +167,9 @@ EOF
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
         echo "//$IP4/$port/$(gen64 $IP6)"
+        echo "$IP4:$port" >> "$WORKDIR/ipv4.txt"
+        new_ipv6=$(gen64 $IP6)
+        echo "$new_ipv6" >> "$WORKDIR/ipv6.txt"
     done
 }
 
@@ -211,29 +214,7 @@ LAST_PORT=22222
 echo “Cổng proxy: $FIRST_PORT”
 echo “Số Lượng Tạo: $(($LAST_PORT - $FIRST_PORT + 1))”
 
-Bổ sung lệnh để tăng giới hạn file descriptor
-
-echo “* hard nofile 999999” | sudo tee -a /etc/security/limits.conf
-echo “* soft nofile 999999” | sudo tee -a /etc/security/limits.conf
-
-Cấu hình sysctl để hỗ trợ IPv6
-
-echo “net.ipv6.conf.ens3.proxy_ndp=1” | sudo tee -a /etc/sysctl.conf
-echo “net.ipv6.conf.all.proxy_ndp=1” | sudo tee -a /etc/sysctl.conf
-echo “net.ipv6.conf.default.forwarding=1” | sudo tee -a /etc/sysctl.conf
-echo “net.ipv6.conf.all.forwarding=1” | sudo tee -a /etc/sysctl.conf
-echo “net.ipv6.ip_nonlocal_bind = 1” | sudo tee -a /etc/sysctl.conf
-
-Thiết lập mô tả cho 3proxy
-
-sudo sed -i “/Description=/c\Description=3 Proxy optimized by VLT PRO” /etc/sysctl.conf
-
-Thiết lập giới hạn file descriptor và process
-
-sudo sed -i “/LimitNOFILE=/c\LimitNOFILE=9999999” /etc/sysctl.conf
-sudo sed -i “/LimitNPROC=/c\LimitNPROC=9999999” /etc/sysctl.conf
-
-Tạo dữ liệu
+l
 
 gen_data >$WORKDIR/data.txt
 gen_iptables >$WORKDIR/boot_iptables.sh
