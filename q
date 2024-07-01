@@ -68,7 +68,7 @@ IPV6_DEFAULTGW=$IPV6_DEFAULTGW
 EOF
 
         # Khởi động lại dịch vụ mạng để áp dụng cấu hình
-        systemctl restart network
+        service network restart
 
         echo "Cấu hình IPv6 cho CentOS hoàn tất."
     else
