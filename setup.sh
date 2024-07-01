@@ -121,6 +121,17 @@ download_proxy() {
     curl -F "file=@/usr/local/etc/3proxy/proxy.txt" https://file.io
 }
 
+cat << EOF > /etc/rc.d/rc.local
+#!/bin/bash
+touch /var/lock/subsys/local
+EOF
+
+install_3proxy
+
+# Install necessary packages
+echo "Installing necessary packages..."
+yum -y install wget gcc net-tools bsdtar zip
+
 rotate_ipv6() {
     gen_data > /etc/data.txt
     gen_iptables
@@ -132,27 +143,10 @@ rotate_ipv6() {
     echo "IPv6 addresses rotated."
 }
 
-# Main script starts here
-
-# Ensure rc.local is correctly set up
-cat << EOF > /etc/rc.d/rc.local
-#!/bin/bash
-touch /var/lock/subsys/local
-/etc/boot_iptables.sh
-/etc/boot_ifconfig.sh
-ulimit -n 65535
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
-EOF
-
-# Install necessary packages
-echo "Installing necessary packages..."
-yum -y install wget gcc net-tools bsdtar zip
 
 # Install and configure 3proxy
 WORKDIR="/home/cloudfly"
 mkdir -p $WORKDIR && cd $WORKDIR
-
-install_3proxy
 
 # Get external IPv4 and IPv6 addresses
 IP4=$(curl -4 -s icanhazip.com)
@@ -173,6 +167,16 @@ gen_iptables > /etc/boot_iptables.sh
 gen_ifconfig > /etc/boot_ifconfig.sh
 chmod +x /etc/boot_*.sh /etc/rc.d/rc.local
 /etc/rc.d/rc.local
+
+# Cập nhật tập tin rc.local để khởi động các dịch vụ và cấu hình khi hệ thống khởi động
+cat >>/etc/rc.local <<EOF
+
+systemctl start NetworkManager.service
+bash ${WORKDIR}/boot_iptables.sh
+bash ${WORKDIR}/boot_ifconfig.sh
+ulimit -n 65535
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
+EOF
 
 # Create systemd service file for 3proxy
 cat <<EOF >/etc/systemd/system/3proxy.service
@@ -212,7 +216,7 @@ WantedBy=multi-user.target
 EOF
 
 chmod +x /etc/rc.d/rc.local
-/etc/rc.d/rc.local
+bash /etc/rc.d/rc.local
 
 # Generate proxy.txt file for user
 gen_proxy_file_for_user
