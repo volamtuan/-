@@ -62,7 +62,7 @@ DNS2=8.8.4.4
 EOF"
 
     # Khởi động lại dịch vụ mạng để áp dụng thay đổi
-    systemctl restart network
+    service network restart
 
     echo "Cấu hình IP tĩnh trên CentOS hoàn tất."
 }
@@ -140,12 +140,6 @@ echo "Ping kiểm tra kết nối..."
 ping -c 4 8.8.8.8
 ping -6 -c 4 google.com
 
-# Khởi động lại dịch vụ mạng
-echo "Khởi động lại dịch vụ mạng..."
-if [ -f /etc/lsb-release ]; then
-    sudo systemctl restart network-manager
-elif [ -f /etc/centos-release ]; then
-    sudo systemctl restart network
-fi
+
 
 echo "Cấu hình hoàn tất."
