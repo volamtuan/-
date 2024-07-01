@@ -12,7 +12,7 @@ setup_ipv6() {
     ip -6 addr flush dev ens33
     curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh" | bash
 }
-
+setup_ipv6
 # Function to generate a random string
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
