@@ -1,6 +1,10 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
+auto_detect_interface() {
+    IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+}
+
 setup_ipv6() {
     echo "Setting up IPv6..."
     ip -6 addr flush dev eth0
@@ -45,7 +49,7 @@ install_3proxy() {
     echo "net.ipv4.tcp_fin_timeout = 30" >> /etc/sysctl.conf
     echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
     echo "net.core.netdev_max_backlog = 4096" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.${interface}.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.${IFCFG}.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
@@ -104,21 +108,21 @@ gen_iptables() {
 #!/bin/bash
 $(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA})
 EOF
-    chmod +x /etc/boot_iptables.sh
+    chmod +x $WORKDIR/boot_iptables.sh
 }
 
 # Function to generate ifconfig commands in boot_ifconfig.sh
 gen_ifconfig() {
     cat <<EOF > /etc/boot_ifconfig.sh
 #!/bin/bash
-$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig .${IFCFG}. inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
-    chmod +x /etc/boot_ifconfig.sh
+    chmod +x $WORKDIR/boot_ifconfig.sh
 }
 
 # Function to download proxy.txt file
 download_proxy() {
-    curl -F "file=@/usr/local/etc/3proxy/proxy.txt" https://file.io
+    curl -F "file=$WORKDIR/proxy.txt" https://file.io
 }
 
 cat << EOF > /etc/rc.d/rc.local
@@ -145,7 +149,7 @@ rotate_ipv6() {
 
 
 # Install and configure 3proxy
-WORKDIR="/home/cloudfly"
+WORKDIR="/home/proxy"
 mkdir -p $WORKDIR && cd $WORKDIR
 
 # Get external IPv4 and IPv6 addresses
@@ -165,8 +169,7 @@ echo "Number of proxies: $(($LAST_PORT - $FIRST_PORT + 1))"
 gen_data > $WORKDIR/data.txt
 gen_iptables > /etc/boot_iptables.sh
 gen_ifconfig > /etc/boot_ifconfig.sh
-chmod +x /etc/boot_*.sh /etc/rc.d/rc.local
-/etc/rc.d/rc.local
+chmod +x $WORKDIR/boot_*.sh
 
 # Cập nhật tập tin rc.local để khởi động các dịch vụ và cấu hình khi hệ thống khởi động
 cat >>/etc/rc.local <<EOF
