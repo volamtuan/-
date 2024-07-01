@@ -3,10 +3,7 @@
 # Lấy thông tin giao diện mạng và địa chỉ IP hiện tại
 get_network_info() {
     echo "Hiện tại đang kiểm tra giao diện mạng và địa chỉ IP..."
-    route -n
-    ifconfig
-
-    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+    INTERFACE=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
     IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
     IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
     GATEWAY4=$(ip route | grep default | awk '{print $3}')
