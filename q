@@ -129,6 +129,7 @@ fi
 
 echo "Giao diện mạng: $interface"
 echo "Đã cấu hình IPv6 thành công!"
+service network restart
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
