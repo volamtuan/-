@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Lấy thông tin giao diện mạng và địa chỉ IP hiện tại
+# Hàm lấy thông tin giao diện mạng và địa chỉ IP hiện tại
 get_network_info() {
     echo "Hiện tại đang kiểm tra giao diện mạng và địa chỉ IP..."
     INTERFACE=$(ip route get 8.8.8.8 | sed -nr 's/.*dev ([^\ ]+).*/\1/p')
@@ -63,12 +63,12 @@ DNS2=8.8.4.4
 EOF"
 
     # Khởi động lại dịch vụ mạng để áp dụng thay đổi
-    service network restart
+    sudo systemctl restart network
 
     echo "Cấu hình IP tĩnh trên CentOS hoàn tất."
 }
 
-# Cấu hình firewall cho Ubuntu
+# Hàm cấu hình firewall cho Ubuntu
 configure_firewall_ubuntu() {
     echo "Cấu hình firewall cho Ubuntu..."
 
@@ -95,8 +95,7 @@ configure_firewall_centos() {
     echo "Cấu hình firewall cho CentOS hoàn tất."
 }
 
-
-# Hàm cấu hình masquerade để cho phép NAT
+# Hàm cấu hình masquerade để cho phép NAT trên CentOS
 configure_masquerade() {
     echo "Đang cấu hình masquerade..."
 
@@ -128,11 +127,8 @@ echo "Ping kiểm tra kết nối..."
 ping -c 4 8.8.8.8
 ping -6 -c 4 google.com
 
-fi
-
 echo "Giao diện mạng: $INTERFACE"
 echo "IPv4: $IP4"
 echo "IPv6: $IP6"
 echo "Đã cấu hình IPv6 thành công!"
-
-}
+service network restart
