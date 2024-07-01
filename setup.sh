@@ -144,8 +144,19 @@ rotate_ipv6() {
     gen_3proxy_cfg
     bash $WORKDIR/boot_iptables.sh
     bash $WORKDIR/boot_ifconfig.sh
-    systemctl restart 3proxy.service
-    echo "IPv6 addresses rotated."
+    echo "Restarting Proxy .."
+    systemctl restart 3proxy
+    restart_result=$?
+
+    if [ $restart_result -eq 0 ]; then
+        echo "IPv6 IPv6 Xoay rotated successfully."
+        echo "[OK]: Thành công"
+    else
+        echo "Failed to Xoay IPv6 new..!"
+        echo "[ERROR]: Thất bại!"
+        exit 1
+    fi
+}
 }
 
 # Install and configure 3proxy
