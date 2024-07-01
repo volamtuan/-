@@ -6,7 +6,7 @@ interface=$(ip -o -4 route show to default | awk '{print $5}')
 
 # Thiết lập IPv6
 setup_ipv6() {
-    echo "Xoá IPv6 Củ.."
+    echo "Xoá IPv6 + Cài Lại Cấu Hình.."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
 }    
@@ -57,9 +57,9 @@ EOF
         # Tạo hoặc chỉnh sửa file ifcfg-eth0
         tee -a "/etc/sysconfig/network-scripts/ifcfg-$INTERFACE" <<-EOF
 IPV6INIT=yes
-IPV6_AUTOCONF=no
+IPV6_AUTOCONF=yes
 IPV6_DEFROUTE=yes
-IPV6_FAILURE_FATAL=no
+IPV6_FAILURE_FATAL=yes
 IPV6_ADDR_GEN_MODE=stable-privacy
 IPV6ADDR=$IPV6_ADDRESS
 IPV6_DEFAULTGW=$IPV6_DEFAULTGW
@@ -124,15 +124,14 @@ elif [ -f /etc/lsb-release ]; then
 
     echo "Cấu hình IPv6 cho Ubuntu hoàn tất."
 fi
-    echo "Giao diện mạng: $INTERFACE"
-    echo "IPv4: $IP4"
-    echo "IPv6: $IP6"
-    echo "Gateway IPv4: $GATEWAY4"
-    echo "Gateway IPv6: $GATEWAY6"
+
+echo "Giao diện mạng: $INTERFACE"
+echo "IPv4: $IP4"
+echo "IPv6: $IP6"
+echo "Gateway IPv4: $GATEWAY4"
+echo "Gateway IPv6: $GATEWAY6"
 
 echo "Đã cấu hình IPv6 thành công!"
-
-}
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
@@ -244,7 +243,7 @@ read -p "Nhập số lượng muốn tạo: " PORT_COUNT
 
 if [[ $PORT_COUNT =~ ^[0-9]+$ && $PORT_COUNT -gt 0 ]]; then
 echo "Đang tạo $PORT_COUNT cổng port..."
-FIRST_PORT=22222
+FIRST_PORT=10000
 LAST_PORT=$((FIRST_PORT + PORT_COUNT - 1))
 
 gen_data >$WORKDIR/data.txt
