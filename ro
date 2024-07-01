@@ -26,15 +26,37 @@ gen64() {
 }
 
 # Hàm cài đặt 3proxy
-install_3proxy() {
-    echo "Installing 3proxy..."
-    URL="https://github.com/z3APA3A/3proxy/archive/3proxy-0.8.6.tar.gz"
-    wget -qO- $URL | bsdtar -xvf-
-    cd 3proxy-3proxy-0.8.6
+URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
+    wget -qO- $URL | tar -xz -C /tmp
+    cd /tmp/3proxy-0.9.4
     make -f Makefile.Linux
     mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
     cp src/3proxy /usr/local/etc/3proxy/bin/
-    cd $WORKDIR
+    cd $WORKDIR  # Ensure this is set correctly before usage
+    systemctl link /usr/lib/systemd/system/3proxy.service
+    systemctl daemon-reload
+    systemctl enable 3proxy
+    Increase system limits
+    echo "* hard nofile 999999" >> /etc/security/limits.conf
+    echo "* soft nofile 999999" >> /etc/security/limits.conf
+    echo "fs.file-max = 1000000" >> /etc/sysctl.conf
+    echo "net.ipv4.ip_local_port_range = 1024 65000" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_fin_timeout = 30" >> /etc/sysctl.conf
+    echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
+    echo "net.core.netdev_max_backlog = 4096" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.eth0.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+    echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+
+    # Stop and disable firewalld
+    systemctl stop firewalld
+    systemctl disable firewalld
+
+    # Apply sysctl settings
+    sysctl -p
+}
 }
 
 # Hàm tạo cấu hình 3proxy
@@ -141,7 +163,7 @@ echo "Internal ip = ${IP4}. Exteranl sub for ip6 = ${IP6}"
 
 # Cổng bắt đầu và kết thúc
 FIRST_PORT=10000
-LAST_PORT=11111
+LAST_PORT=10011
 
 # Cài đặt môi trường
 setup_environment
@@ -227,7 +249,6 @@ while true; do
             ;;
         2)
             rotate_ipv6
-            sleep 3600
             ;;
         3)
             download_proxy
