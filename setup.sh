@@ -223,7 +223,7 @@ bash /etc/rc.d/rc.local
 
 # Generate proxy.txt file for user
 gen_proxy_file_for_user
-rm -rf /home/3proxy-0.9.4
+rm -rf /root/3proxy-0.9.4
 
 echo “Starting Proxy”
 
