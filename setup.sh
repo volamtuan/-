@@ -116,7 +116,7 @@ EOF
 gen_ifconfig() {
     cat <<EOF > $WORKDIR/boot_ifconfig.sh
 #!/bin/bash
-$(awk -F "/" '{print "ifconfig ${IFCFG} inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig '${IFCFG}' inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
     chmod +x $WORKDIR/boot_ifconfig.sh
 }
@@ -172,7 +172,7 @@ echo "IPv6 = ${IP6}"
 
 # Set proxy ports range and generate data.txt
 FIRST_PORT=40000
-LAST_PORT=44444
+LAST_PORT=40044
 
 echo "Proxy ports range: $FIRST_PORT - $LAST_PORT"
 echo "Number of proxies: $(($LAST_PORT - $FIRST_PORT + 1))"
@@ -184,8 +184,9 @@ chmod +x $WORKDIR/boot_*.sh
 
 # Cập nhật tập tin rc.local để khởi động các dịch vụ và cấu hình khi hệ thống khởi động
 cat >>/etc/rc.local <<EOF
-
 systemctl start NetworkManager.service
+killall 3proxy
+service 3proxy start
 bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 65535
@@ -228,6 +229,8 @@ SysVStartPriority=99
 [Install]
 WantedBy=multi-user.target
 EOF
+systemctl disable --now firewalld
+service iptables stop
 
 chmod +x /etc/rc.d/rc.local
 bash /etc/rc.d/rc.local
