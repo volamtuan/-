@@ -6,12 +6,133 @@ interface=$(ip -o -4 route show to default | awk '{print $5}')
 
 # Thiết lập IPv6
 setup_ipv6() {
-    echo "Thiết lập Cấu Hình Mạng.."
+    echo "Xoá IPv6 Củ.."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
-    bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ip")
-}
+}    
 setup_ipv6
+
+# Kiểm tra hệ điều hành để quyết định cách cấu hình
+if [ -f /etc/centos-release ]; then
+    # CentOS
+
+    YUM=$(which yum)
+
+    if [ "$YUM" ]; then
+        # Cấu hình IPv6 cho CentOS
+        echo "Cấu hình IPv6 cho CentOS..."
+
+        # Xóa nội dung của /etc/sysctl.conf và thêm cấu hình IPv6
+        echo > /etc/sysctl.conf
+        tee -a /etc/sysctl.conf <<EOF
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv6.conf.all.disable_ipv6 = 0
+EOF
+
+        # Tải lại cấu hình sysctl
+        sysctl -p
+
+        # Lấy phần IP3 và IP4 từ địa chỉ IPv4 hiện tại
+        IPC=$(curl -4 -s icanhazip.com | cut -d"." -f3)
+        IPD=$(curl -4 -s icanhazip.com | cut -d"." -f4)
+
+        # Tìm tên giao diện mạng
+        INTERFACE=$(ls /sys/class/net | grep -E 'e|eth')
+
+        # Cấu hình file ifcfg-eth0 dựa trên giá trị của IPC
+        if [ "$IPC" == "4" ]; then
+            IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:40::1"
+        elif [ "$IPC" == "5" ]; then
+            IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:41::1"
+        elif [ "$IPC" == "244" ]; then
+            IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:2000:244::1"
+        else
+            IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:$IPC::1"
+        fi
+
+        # Tạo hoặc chỉnh sửa file ifcfg-eth0
+        tee -a "/etc/sysconfig/network-scripts/ifcfg-$INTERFACE" <<-EOF
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=$IPV6_ADDRESS
+IPV6_DEFAULTGW=$IPV6_DEFAULTGW
+EOF
+
+        # Khởi động lại dịch vụ mạng để áp dụng cấu hình
+        systemctl restart network
+
+        echo "Cấu hình IPv6 cho CentOS hoàn tất."
+    else
+        echo "Không tìm thấy YUM trên hệ thống."
+        exit 1
+    fi
+
+elif [ -f /etc/lsb-release ]; then
+    # Ubuntu
+
+    # Cấu hình IPv6 cho Ubuntu
+    echo "Cấu hình IPv6 cho Ubuntu..."
+
+    # Lấy IPv4 hiện tại và phần IP3, IP4 từ nó
+    ipv4=$(curl -4 -s icanhazip.com)
+    IPC=$(echo "$ipv4" | cut -d"." -f3)
+    IPD=$(echo "$ipv4" | cut -d"." -f4)
+
+    # Lấy tên giao diện mạng phù hợp
+    INTERFACE=$(ls /sys/class/net | grep 'e')
+
+    # Cấu hình địa chỉ IPv6 và gateway dựa trên giá trị của IPC
+    if [ "$IPC" == "4" ]; then
+        IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:40::1"
+    elif [ "$IPC" == "5" ]; then
+        IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:41::1"
+    elif [ "$IPC" == "244" ]; then
+        IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+        GATEWAY="2403:6a40:2000:244::1"
+    else
+        IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+        GATEWAY="2403:6a40:0:$IPC::1"
+    fi
+
+    # Xác định đường dẫn tệp cấu hình Netplan phù hợp
+    if [ "$INTERFACE" == "ens160" ]; then
+        NETPLAN_PATH="/etc/netplan/99-netcfg-vmware.yaml"
+    elif [ "$INTERFACE" == "eth0" ]; then
+        NETPLAN_PATH="/etc/netplan/50-cloud-init.yaml"
+    else
+        echo "Không tìm thấy card mạng phù hợp."
+        exit 1
+    fi
+
+    # Đọc và cập nhật tệp cấu hình Netplan
+    NETPLAN_CONFIG=$(cat "$NETPLAN_PATH")
+    NEW_NETPLAN_CONFIG=$(sed "/gateway4:/i \ \ \ \ \ \ \  - $IPV6_ADDRESS" <<< "$NETPLAN_CONFIG")
+    NEW_NETPLAN_CONFIG=$(sed "/gateway4:.*/a \ \ \ \ \  gateway6: $GATEWAY" <<< "$NEW_NETPLAN_CONFIG")
+    echo "$NEW_NETPLAN_CONFIG" > "$NETPLAN_PATH"
+
+    # Áp dụng cấu hình Netplan
+    sudo netplan apply
+
+    echo "Cấu hình IPv6 cho Ubuntu hoàn tất."
+fi
+    echo "Giao diện mạng: $INTERFACE"
+    echo "IPv4: $IP4"
+    echo "IPv6: $IP6"
+    echo "Gateway IPv4: $GATEWAY4"
+    echo "Gateway IPv6: $GATEWAY6"
+
+echo "Đã cấu hình IPv6 thành công!"
+
+}
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
