@@ -2,7 +2,7 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 auto_detect_interface() {
-    IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
+    IFCFG=$((ip route get 8.8.8.8 | awk -- '{printf $5}')
 }
 auto_detect_interface
 
@@ -41,27 +41,17 @@ install_3proxy() {
     systemctl link /usr/lib/systemd/system/3proxy.service
     systemctl daemon-reload
     systemctl enable 3proxy
-
-    # Increase system limits
-    echo "* hard nofile 999999" >> /etc/security/limits.conf
-    echo "* soft nofile 999999" >> /etc/security/limits.conf
-    echo "fs.file-max = 1000000" >> /etc/sysctl.conf
-    echo "net.ipv4.ip_local_port_range = 1024 65000" >> /etc/sysctl.conf
-    echo "net.ipv4.tcp_fin_timeout = 30" >> /etc/sysctl.conf
-    echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
-    echo "net.core.netdev_max_backlog = 4096" >> /etc/sysctl.conf
-    echo "net.ipv6.conf.${IFCFG}.proxy_ndp=1" >> /etc/sysctl.conf
+    echo "* hard nofile 999999" >>  /etc/security/limits.conf
+    echo "* soft nofile 999999" >>  /etc/security/limits.conf
+    echo "net.ipv6.conf.$IFCFG.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
-
-    # Stop and disable firewalld
+    sysctl -p
     systemctl stop firewalld
     systemctl disable firewalld
-
-    # Apply sysctl settings
-    sysctl -p
+    cd $WORKDIR
 }
 
 # Function to generate 3proxy configuration file
@@ -103,22 +93,12 @@ gen_data() {
     done
 }
 
-# Function to generate iptables rules in boot_iptables.sh
 gen_iptables() {
-    cat <<EOF > $WORKDIR/boot_iptables.sh
-#!/bin/bash
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA})
-EOF
-    chmod +x $WORKDIR/boot_iptables.sh
+    awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' "${WORKDATA}"
 }
 
-# Function to generate ifconfig commands in boot_ifconfig.sh
 gen_ifconfig() {
-    cat <<EOF > $WORKDIR/boot_ifconfig.sh
-#!/bin/bash
-$(awk -F "/" '{print "ifconfig ${IFCFG} inet6 add " $5 "/64"}' ${WORKDATA})
-EOF
-    chmod +x $WORKDIR/boot_ifconfig.sh
+    awk -F "/" '{print "ifconfig $IFCFG inet6 add " $5 "/64"}' "${WORKDATA}"
 }
 
 # Function to download proxy.txt file
@@ -180,12 +160,16 @@ echo "Number of proxies: $(($LAST_PORT - $FIRST_PORT + 1))"
 gen_data > $WORKDIR/data.txt
 gen_iptables > $WORKDIR/boot_iptables.sh
 gen_ifconfig > $WORKDIR/boot_ifconfig.sh
-chmod +x $WORKDIR/boot_*.sh
+chmod +x "${WORKDIR}/boot_*.sh" /etc/rc.local
+
+gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
 
 # Cập nhật tập tin rc.local để khởi động các dịch vụ và cấu hình khi hệ thống khởi động
 cat >>/etc/rc.local <<EOF
-
 systemctl start NetworkManager.service
+ifup ${IFCFG}
+killall 3proxy
+service 3proxy start
 bash ${WORKDIR}/boot_iptables.sh
 bash ${WORKDIR}/boot_ifconfig.sh
 ulimit -n 65535
