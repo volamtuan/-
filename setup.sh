@@ -5,9 +5,8 @@ setup_ipv6() {
     echo "Setting up IPv6..."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
-    bash <(curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh")
+    curl -s "https://raw.githubusercontent.com/quanglinh0208/3proxy/main/ipv6.sh" | bash
 }
-setup_ipv6
 
 # Function to generate a random string
 random() {
@@ -25,34 +24,39 @@ gen64() {
 }
 
 # Function to install 3proxy from source
-
 install_3proxy() {
     echo "Installing 3proxy..."
     URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
-    wget -qO- $URL | bsdtar -xvf- >/dev/null 2>&1
-    cd 3proxy-0.9.4
-    make -f Makefile.Linux >/dev/null 2>&1
-    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat} >/dev/null 2>&1
-    cp src/3proxy /usr/local/etc/3proxy/bin/ >/dev/null 2>&1
-    cd $WORKDIR  # Đã sửa thành đường dẫn tuyệt đối
+    wget -qO- $URL | tar -xz -C /tmp
+    cd /tmp/3proxy-0.9.4
+    make -f Makefile.Linux
+    mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
+    cp src/3proxy /usr/local/etc/3proxy/bin/
+    cd $WORKDIR  # Ensure this is set correctly before usage
     systemctl link /usr/lib/systemd/system/3proxy.service
     systemctl daemon-reload
     systemctl enable 3proxy
-    echo "* hard nofile 999999" >>  /etc/security/limits.conf
-    echo "* soft nofile 999999" >>  /etc/security/limits.conf
-    echo "net.ipv6.conf.${IFCFG}.proxy_ndp=1" >> /etc/sysctl.conf
+
+    # Increase system limits
+    echo "* hard nofile 999999" >> /etc/security/limits.conf
+    echo "* soft nofile 999999" >> /etc/security/limits.conf
+    echo "fs.file-max = 1000000" >> /etc/sysctl.conf
+    echo "net.ipv4.ip_local_port_range = 1024 65000" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_fin_timeout = 30" >> /etc/sysctl.conf
+    echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
+    echo "net.core.netdev_max_backlog = 4096" >> /etc/sysctl.conf
+    echo "net.ipv6.conf.${interface}.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.proxy_ndp=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+
+    # Stop and disable firewalld
     systemctl stop firewalld
     systemctl disable firewalld
-    echo "fs.file-max = 1000000" | sudo tee -a /etc/sysctl.conf
-    echo "net.ipv4.ip_local_port_range = 1024 65000" | sudo tee -a /etc/sysctl.conf
-    echo "net.ipv4.tcp_fin_timeout = 30" | sudo tee -a /etc/sysctl.conf
-    echo "net.core.somaxconn = 4096" | sudo tee -a /etc/sysctl.conf
-    echo "net.core.netdev_max_backlog = 4096" | sudo tee -a /etc/sysctl.conf
-    sudo sysctl -p
+
+    # Apply sysctl settings
+    sysctl -p
 }
 
 # Function to generate 3proxy configuration file
@@ -78,61 +82,71 @@ $(awk -F "/" '{print "proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\nflush\n"}' ${WORK
 EOF
 }
 
-# Function to generate proxy.txt file for user
 gen_proxy_file_for_user() {
-    awk -F "/" '{print $3 ":" $4}' ${WORKDATA} > proxy.txt
+    cat >proxy.txt <<EOF
+$(awk -F "/" '{print $3 ":" $4}' ${WORKDATA})
+EOF
 }
 
 # Function to generate data.txt containing proxy configurations
 gen_data() {
     seq $FIRST_PORT $LAST_PORT | while read port; do
-        echo "//$IP4/$port/$(gen64 $IP6)"
+        echo "//$IP4/$port/$(gen64 $vPrefix)"
+        echo "$IP4:$port" >> "$WORKDIR/ipv4.txt"
+        new_ipv6=$(gen64 $vPrefix)
+        echo "$new_ipv6" >> "$WORKDIR/ipv6.txt"
     done
 }
 
 # Function to generate iptables rules in boot_iptables.sh
 gen_iptables() {
-    cat <<EOF > $WORKDIR/boot_iptables.sh
+    cat <<EOF > /etc/boot_iptables.sh
 #!/bin/bash
 $(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 " -m state --state NEW -j ACCEPT"}' ${WORKDATA})
 EOF
-    chmod +x $WORKDIR/boot_iptables.sh
+    chmod +x /etc/boot_iptables.sh
 }
 
 # Function to generate ifconfig commands in boot_ifconfig.sh
 gen_ifconfig() {
-    cat <<EOF > $WORKDIR/boot_ifconfig.sh
+    cat <<EOF > /etc/boot_ifconfig.sh
 #!/bin/bash
 $(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
-    chmod +x $WORKDIR/boot_ifconfig.sh
+    chmod +x /etc/boot_ifconfig.sh
 }
 
 # Function to download proxy.txt file
 download_proxy() {
-    cd $WORKDIR || return
-    curl -F "file=@proxy.txt" https://file.io
+    curl -F "file=@/usr/local/etc/3proxy/proxy.txt" https://file.io
 }
 
 rotate_ipv6() {
-    gen_data > $WORKDIR/data.txt
+    gen_data > /etc/data.txt
     gen_iptables
     gen_ifconfig
     gen_3proxy_cfg
-    bash ${WORKDIR}/boot_iptables.sh
-    bash ${WORKDIR}/boot_ifconfig.sh
+    bash /etc/boot_iptables.sh
+    bash /etc/boot_ifconfig.sh
     systemctl restart 3proxy.service
     echo "IPv6 addresses rotated."
 }
 
+# Main script starts here
+
+# Ensure rc.local is correctly set up
 cat << EOF > /etc/rc.d/rc.local
 #!/bin/bash
 touch /var/lock/subsys/local
+/etc/boot_iptables.sh
+/etc/boot_ifconfig.sh
+ulimit -n 65535
+/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
 EOF
 
 # Install necessary packages
 echo "Installing necessary packages..."
-yum -y install wget gcc net-tools bsdtar zip >/dev/null
+yum -y install wget gcc net-tools bsdtar zip
 
 # Install and configure 3proxy
 WORKDIR="/home/cloudfly"
@@ -144,36 +158,23 @@ install_3proxy
 IP4=$(curl -4 -s icanhazip.com)
 IP6=$(ip addr show eth0 | grep 'inet6 ' | awk '{print $2}' | cut -f1-4 -d':' | grep '^2')
 
-echo "IPv4 = ${IP4} "
+echo "IPv4 = ${IP4}"
 echo "IPv6 = ${IP6}"
 
 # Set proxy ports range and generate data.txt
 FIRST_PORT=40000
 LAST_PORT=44444
 
-echo "Cổng proxy: $FIRST_PORT"
-echo "Số lượng proxy tạo: $(($LAST_PORT - $FIRST_PORT + 1))"
+echo "Proxy ports range: $FIRST_PORT - $LAST_PORT"
+echo "Number of proxies: $(($LAST_PORT - $FIRST_PORT + 1))"
 
-gen_data >$WORKDIR/data.txt
-gen_iptables >$WORKDIR/boot_iptables.sh
-gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-chmod +x $WORKDIR/boot_*.sh /etc/rc.local
-/etc/rc.local
+gen_data > $WORKDIR/data.txt
+gen_iptables > /etc/boot_iptables.sh
+gen_ifconfig > /etc/boot_ifconfig.sh
+chmod +x /etc/boot_*.sh /etc/rc.d/rc.local
+/etc/rc.d/rc.local
 
-chmod +x $WORKDIR/boot_iptables.sh
-chmod +x $WORKDIR/boot_ifconfig.sh
-
-# Cập nhật tập tin rc.local để khởi động các dịch vụ và cấu hình khi hệ thống khởi động
-cat >>/etc/rc.local <<EOF
-
-systemctl start NetworkManager.service
-bash ${WORKDIR}/boot_iptables.sh
-bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -n 65535
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
-EOF
-
-# Tạo file dịch vụ systemd cho 3proxy
+# Create systemd service file for 3proxy
 cat <<EOF >/etc/systemd/system/3proxy.service
 [Unit]
 Description=3proxy Proxy Server
@@ -192,7 +193,7 @@ LimitNOFILE=1000000
 WantedBy=multi-user.target
 EOF
 
-# Tạo file dịch vụ systemd cho rc.local nếu chưa có
+# Create systemd service file for rc.local if not exists
 cat <<EOF >/etc/systemd/system/rc-local.service
 [Unit]
 Description=/etc/rc.local Compatibility
@@ -210,20 +211,21 @@ SysVStartPriority=99
 WantedBy=multi-user.target
 EOF
 
-chmod +x /etc/rc.local
-bash /etc/rc.local
+chmod +x /etc/rc.d/rc.local
+/etc/rc.d/rc.local
 
-# Tạo tập tin proxy cho người dùng
+# Generate proxy.txt file for user
 gen_proxy_file_for_user
-rm -rf /root/3proxy-0.9.4
+rm -rf /tmp/3proxy-0.9.4
 
 echo "Starting Proxy"
 
-echo "Tổng số IPv6 hiện tại:"
+echo "Total current IPv6 addresses:"
 ip -6 addr | grep inet6 | wc -l
 download_proxy
 
+# Rotate IPv6 addresses every hour (3600 seconds)
 while true; do
     rotate_ipv6
-    sleep 3600  # Rotate IPv6 addresses every hour (3600 seconds)
+    sleep 3600
 done
