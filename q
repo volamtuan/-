@@ -1,26 +1,28 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
 # Lấy tên giao diện mạng
 interface=$(ip -o -4 route show to default | awk '{print $5}')
 
-# Thiết lập IPv6
+# Xoá toàn bộ địa chỉ IPv6 trên giao diện mạng
 setup_ipv6() {
-    echo "Xoá IPv6 + Cài Lại Cấu Hình.."
-    ip -6 addr flush dev eth0
-    ip -6 addr flush dev ens33
-}    
+    echo "Xoá IPv6.."
+    ip -6 addr flush dev "$interface"
+}
+
 setup_ipv6
 
 # Kiểm tra hệ điều hành để quyết định cách cấu hình
 if [ -f /etc/centos-release ]; then
     # CentOS
 
+    # Kiểm tra sự tồn tại của YUM
     YUM=$(which yum)
-
-    if [ "$YUM" ]; then
+    if [ -n "$YUM" ]; then
         # Cấu hình IPv6 cho CentOS
-        echo "Cấu hình IPv6 cho CentOS..."
 
         # Xóa nội dung của /etc/sysctl.conf và thêm cấu hình IPv6
         echo > /etc/sysctl.conf
@@ -57,9 +59,9 @@ EOF
         # Tạo hoặc chỉnh sửa file ifcfg-eth0
         tee -a "/etc/sysconfig/network-scripts/ifcfg-$INTERFACE" <<-EOF
 IPV6INIT=yes
-IPV6_AUTOCONF=yes
+IPV6_AUTOCONF=no
 IPV6_DEFROUTE=yes
-IPV6_FAILURE_FATAL=yes
+IPV6_FAILURE_FATAL=no
 IPV6_ADDR_GEN_MODE=stable-privacy
 IPV6ADDR=$IPV6_ADDRESS
 IPV6_DEFAULTGW=$IPV6_DEFAULTGW
@@ -125,12 +127,7 @@ elif [ -f /etc/lsb-release ]; then
     echo "Cấu hình IPv6 cho Ubuntu hoàn tất."
 fi
 
-echo "Giao diện mạng: $INTERFACE"
-echo "IPv4: $IP4"
-echo "IPv6: $IP6"
-echo "Gateway IPv4: $GATEWAY4"
-echo "Gateway IPv6: $GATEWAY6"
-
+echo "Giao diện mạng: $interface"
 echo "Đã cấu hình IPv6 thành công!"
 
 random() {
