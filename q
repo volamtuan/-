@@ -101,15 +101,9 @@ $(awk -F "/" '{print "ifconfig $interface inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
-# Set up /etc/rc.local for persistence
-cat <<EOF | sudo tee /etc/rc.d/rc.local
+cat << EOF > /etc/rc.d/rc.local
 #!/bin/bash
 touch /var/lock/subsys/local
-systemctl start NetworkManager.service
-bash ${WORKDIR}/boot_iptables.sh
-bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -n 65535
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg &
 EOF
 
 echo "Installing necessary packages..."
