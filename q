@@ -9,7 +9,7 @@ setup_ipv6() {
     echo "Thiết lập Cấu Hình Mạng.."
     ip -6 addr flush dev eth0
     ip -6 addr flush dev ens33
-    sudo bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ip")
+    sudo bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ip.sh")
 }
 setup_ipv6
 
