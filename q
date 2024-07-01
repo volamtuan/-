@@ -7,6 +7,8 @@ interface=$(ip -o -4 route show to default | awk '{print $5}')
 # Thiết lập IPv6
 setup_ipv6() {
     echo "Thiết lập Cấu Hình Mạng.."
+    ip -6 addr flush dev eth0
+    ip -6 addr flush dev ens33
     sudo bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/main/ip")
 }
 setup_ipv6
