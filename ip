@@ -101,9 +101,6 @@ configure_iptables_centos() {
     sudo iptables -t nat -A PREROUTING -p tcp -d $IP4 --dport 0-65535 -j DNAT --to-destination $IP4
     sudo iptables -t nat -A POSTROUTING -p tcp -d $IP4 --dport 0-65535 -j SNAT --to-source $IP4
 
-    sudo sh -c "iptables-save > /etc/iptables.rules"
-    sudo iptables-restore < /etc/iptables.rules
-
     echo "Cấu hình iptables cho CentOS hoàn tất."
 }
 
