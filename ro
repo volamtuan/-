@@ -2,9 +2,8 @@
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 auto_detect_interface() {
-    IFCFG=$((ip route get 8.8.8.8 | awk -- '{printf $5}')
+    IFCFG=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
 }
-auto_detect_interface
 
 setup_ipv6() {
     echo "Setting up IPv6..."
