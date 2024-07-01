@@ -95,15 +95,6 @@ configure_firewall_centos() {
     echo "Cấu hình firewall cho CentOS hoàn tất."
 }
 
-# Hàm cấu hình iptables cho CentOS
-configure_iptables_centos() {
-    echo "Cấu hình iptables cho CentOS..."
-
-    sudo iptables -t nat -A PREROUTING -p tcp -d $IP4 --dport 0-65535 -j DNAT --to-destination $IP4
-    sudo iptables -t nat -A POSTROUTING -p tcp -d $IP4 --dport 0-65535 -j SNAT --to-source $IP4
-
-    echo "Cấu hình iptables cho CentOS hoàn tất."
-}
 
 # Hàm cấu hình masquerade để cho phép NAT
 configure_masquerade() {
@@ -126,7 +117,6 @@ elif [ -f /etc/centos-release ]; then
     get_network_info
     configure_centos
     configure_firewall_centos
-    configure_iptables_centos
     configure_masquerade  # Thêm cấu hình masquerade cho CentOS
 else
     echo "Hệ điều hành không được hỗ trợ bởi script này."
