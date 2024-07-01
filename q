@@ -1,9 +1,6 @@
 #!/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-#!/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
 # Lấy tên giao diện mạng
 interface=$(ip -o -4 route show to default | awk '{print $5}')
 
@@ -129,7 +126,6 @@ fi
 
 echo "Giao diện mạng: $interface"
 echo "Đã cấu hình IPv6 thành công!"
-service network restart
 
 random() {
     tr </dev/urandom -dc A-Za-z0-9 | head -c5
