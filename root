@@ -117,7 +117,6 @@ rotate_ipv6() {
     gen_data >$WORKDIR/data.txt
     gen_ifconfig >$WORKDIR/boot_ifconfig.sh
     bash $WORKDIR/boot_ifconfig.sh
-    echo "IPv6 addresses rotated successfully."
     echo "Restarting 3proxy service..."
     systemctl restart 3proxy
     restart_result=$?
@@ -220,7 +219,7 @@ bash /etc/rc.local
 
 gen_proxy_file_for_user
 
-rm -rf /root/3proxy-3proxy-0.8.6
+rm -rf /root/3proxy-0.9.3
 
 echo "Starting Proxy"
 echo "So Luong IPv6 Hien Tai:"
@@ -240,6 +239,7 @@ while true; do
             ;;
         2)
             rotate_ipv6
+            sleep 3600
             ;;
         3)
             download_proxy
