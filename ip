@@ -128,6 +128,11 @@ echo "Ping kiểm tra kết nối..."
 ping -c 4 8.8.8.8
 ping -6 -c 4 google.com
 
+fi
 
+echo "Giao diện mạng: $INTERFACE"
+echo "IPv4: $IP4"
+echo "IPv6: $IP6"
+echo "Đã cấu hình IPv6 thành công!"
 
-echo "Cấu hình hoàn tất."
+}
