@@ -1,21 +1,18 @@
 #!/bin/bash
 
-# Hàm lấy tên card mạng và cấu hình IPv6 dựa trên IPv4 hiện tại
-get_network_info() {
-    echo "Đang lấy thông tin giao diện mạng và cấu hình IPv6..."
+# Hàm lấy thông tin và cấu hình IPv6 dựa trên IPv4 hiện tại
+configure_ipv6() {
+    echo "Đang cấu hình IPv6 dựa trên IPv4 hiện tại..."
 
-    # Kiểm tra hệ điều hành để quyết định cách cấu hình
-    if [ -f /etc/centos-release ]; then
+    if command -v yum > /dev/null 2>&1; then
         # CentOS
         echo "Hệ điều hành: CentOS"
 
+        # Cài đặt các gói cần thiết nếu chưa có
+        sudo yum install -y net-tools
+
         # Lấy tên giao diện mạng phù hợp
         INTERFACE=$(ip -o link show | awk -F': ' '$2 ~ /^(en|eth)/ {print $2; exit}')
-
-        if [ -z "$INTERFACE" ]; then
-            echo "Không tìm thấy giao diện mạng phù hợp."
-            exit 1
-        fi
 
         # Lấy địa chỉ IPv4 và IPv6 (loại bỏ địa chỉ link-local fe80::)
         IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
@@ -89,9 +86,13 @@ EOF
         echo "Gateway IPv6: $GATEWAY6"
         echo "Cấu hình IPv6 cho CentOS hoàn tất."
 
-    elif [ -f /etc/lsb-release ]; then
+    elif command -v apt > /dev/null 2>&1; then
         # Ubuntu
         echo "Hệ điều hành: Ubuntu"
+
+        # Cài đặt các gói cần thiết nếu chưa có
+        sudo apt update
+        sudo apt install -y net-tools
 
         # Lấy tên giao diện mạng phù hợp
         INTERFACE=$(ls /sys/class/net | grep 'e')
@@ -155,10 +156,10 @@ EOF
         echo "Cấu hình IPv6 cho Ubuntu hoàn tất."
 
     else
-        echo "Hệ điều hành không được hỗ trợ."
+        echo "Không tìm thấy yum hoặc apt trên hệ thống."
         exit 1
     fi
 }
 
 # Gọi hàm để lấy thông tin và cấu hình IPv6
-get_network_info
+configure_ipv6
