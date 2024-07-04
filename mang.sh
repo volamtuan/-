@@ -1,59 +1,64 @@
 #!/bin/bash
 
-# Lấy thông tin giao diện mạng và địa chỉ IP hiện tại
+# Hàm lấy tên card mạng và cấu hình IPv6 dựa trên IPv4 hiện tại
 get_network_info() {
-    echo "Đang lấy thông tin giao diện mạng và địa chỉ IP..."
-    route -n
-    ifconfig
+    echo "Đang lấy thông tin giao diện mạng và cấu hình IPv6..."
 
-    INTERFACE=$(ip -o link show | awk -F': ' '$3 !~ /lo|vir|^[^0-9]/ {print $2; exit}')
-    IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
-    IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
-    GATEWAY4=$(ip route | grep default | awk '{print $3}')
-    GATEWAY6=$(ip -6 route | grep default | awk '{print $3}')
-}
+    # Kiểm tra hệ điều hành để quyết định cách cấu hình
+    if [ -f /etc/centos-release ]; then
+        # CentOS
+        echo "Hệ điều hành: CentOS"
 
-# Hàm cấu hình IP tĩnh cho Ubuntu
-configure_ubuntu() {
-    echo "Đang cấu hình IP tĩnh cho Ubuntu..."
+        # Lấy tên giao diện mạng phù hợp
+        INTERFACE=$(ip -o link show | awk -F': ' '$2 ~ /^(en|eth)/ {print $2; exit}')
 
-    # Kiểm tra và cài đặt các gói cần thiết trên Ubuntu
-    check_and_install_ubuntu
+        if [ -z "$INTERFACE" ]; then
+            echo "Không tìm thấy giao diện mạng phù hợp."
+            exit 1
+        fi
 
-    # Tạo hoặc chỉnh sửa tệp cấu hình Netplan
-    sudo bash -c "cat > /etc/netplan/00-installer-config.yaml <<EOF
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    $INTERFACE:
-      dhcp4: no
-      dhcp6: no
-      addresses: [$IP4/24, $IP6/64]
-      gateway4: $GATEWAY4
-      nameservers:
-          addresses: [8.8.8.8, 8.8.4.4]
-EOF"
+        # Lấy địa chỉ IPv4 và IPv6 (loại bỏ địa chỉ link-local fe80::)
+        IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
+        IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
 
-    # Thử cấu hình Netplan
-    sudo netplan try
+        # Lấy gateway IPv4 và IPv6
+        GATEWAY4=$(ip route | grep default | awk '{print $3}')
+        GATEWAY6=$(ip -6 route | grep default | awk '{print $3}')
 
-    # Tạo và áp dụng cấu hình Netplan
-    sudo netplan generate
-    sudo netplan apply
+        # Cấu hình IPv6 cho CentOS
+        echo "Cấu hình IPv6 cho CentOS..."
 
-    echo "Cấu hình IP tĩnh trên Ubuntu hoàn tất."
-}
+        # Xóa nội dung của /etc/sysctl.conf và thêm cấu hình IPv6
+        echo > /etc/sysctl.conf
+        tee -a /etc/sysctl.conf <<EOF
+net.ipv6.conf.default.disable_ipv6 = 0
+net.ipv6.conf.all.disable_ipv6 = 0
+EOF
 
-# Hàm cấu hình IP tĩnh cho CentOS
-configure_centos() {
-    echo "Đang cấu hình IP tĩnh cho CentOS..."
+        # Tải lại cấu hình sysctl
+        sysctl -p
 
-    # Kiểm tra và cài đặt các gói cần thiết trên CentOS
-    check_and_install_centos
+        # Cấu hình file ifcfg-<INTERFACE> dựa trên địa chỉ IPv4 hiện tại
+        IPC=$(echo "$IP4" | cut -d"." -f3)
+        IPD=$(echo "$IP4" | cut -d"." -f4)
 
-    # Tạo hoặc chỉnh sửa tệp cấu hình mạng cho giao diện eth0
-    sudo bash -c "cat > /etc/sysconfig/network-scripts/ifcfg-$INTERFACE <<EOF
+        if [ "$IPC" == "4" ]; then
+            IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:40::1"
+        elif [ "$IPC" == "5" ]; then
+            IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:41::1"
+        elif [ "$IPC" == "244" ]; then
+            IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:2000:244::1"
+        else
+            IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+            IPV6_DEFAULTGW="2403:6a40:0:$IPC::1"
+        fi
+
+        # Tạo hoặc chỉnh sửa file ifcfg-<INTERFACE>
+        tee -a "/etc/sysconfig/network-scripts/ifcfg-$INTERFACE" <<-EOF
+
 TYPE=Ethernet
 BOOTPROTO=none
 NAME=$INTERFACE
@@ -65,47 +70,95 @@ IPV6ADDR=$IP6/64
 GATEWAY=$GATEWAY4
 DNS1=8.8.8.8
 DNS2=8.8.4.4
-EOF"
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=$IPV6_ADDRESS
+IPV6_DEFAULTGW=$IPV6_DEFAULTGW
+EOF
 
-    # Khởi động lại dịch vụ mạng để áp dụng thay đổi
-    sudo systemctl restart network
+        # Khởi động lại dịch vụ mạng để áp dụng cấu hình
+        systemctl restart network
 
-    echo "Cấu hình IP tĩnh trên CentOS hoàn tất."
-}
+        echo "Giao diện mạng: $INTERFACE"
+        echo "IPv4: $IP4"
+        echo "IPv6: $IP6"
+        echo "Gateway IPv4: $GATEWAY4"
+        echo "Gateway IPv6: $GATEWAY6"
+        echo "Cấu hình IPv6 cho CentOS hoàn tất."
 
-# Kiểm tra và cài đặt các gói cần thiết trên Ubuntu
-check_and_install_ubuntu() {
-    echo "Kiểm tra và cài đặt các gói cần thiết trên Ubuntu..."
+    elif [ -f /etc/lsb-release ]; then
+        # Ubuntu
+        echo "Hệ điều hành: Ubuntu"
 
-    if ! command -v netplan &> /dev/null; then
-        sudo apt update
-        sudo apt install -y netplan.io
+        # Lấy tên giao diện mạng phù hợp
+        INTERFACE=$(ls /sys/class/net | grep 'e')
+
+        if [ -z "$INTERFACE" ]; then
+            echo "Không tìm thấy giao diện mạng phù hợp."
+            exit 1
+        fi
+
+        # Lấy địa chỉ IPv4 hiện tại và phần IP3, IP4 từ nó
+        IP4=$(ip -4 addr show dev $INTERFACE | grep inet | awk '{print $2}' | cut -d/ -f1)
+        IPC=$(echo "$IP4" | cut -d"." -f3)
+        IPD=$(echo "$IP4" | cut -d"." -f4)
+
+        # Lấy địa chỉ IPv6 (loại bỏ địa chỉ link-local fe80::)
+        IP6=$(ip -6 addr show dev $INTERFACE | grep inet6 | awk '{print $2}' | cut -d/ -f1 | grep -v ^fe80)
+
+        # Lấy gateway IPv4 và IPv6
+        GATEWAY4=$(ip route | grep default | awk '{print $3}')
+        GATEWAY6=$(ip -6 route | grep default | awk '{print $3}')
+
+        # Cấu hình địa chỉ IPv6 và gateway dựa trên giá trị của IPC
+        if [ "$IPC" == "4" ]; then
+            IPV6_ADDRESS="2403:6a40:0:40::$IPD:0000/64"
+            GATEWAY="2403:6a40:0:40::1"
+        elif [ "$IPC" == "5" ]; then
+            IPV6_ADDRESS="2403:6a40:0:41::$IPD:0000/64"
+            GATEWAY="2403:6a40:0:41::1"
+        elif [ "$IPC" == "244" ]; then
+            IPV6_ADDRESS="2403:6a40:2000:244::$IPD:0000/64"
+            GATEWAY="2403:6a40:2000:244::1"
+        else
+            IPV6_ADDRESS="2403:6a40:0:$IPC::$IPD:0000/64"
+            GATEWAY="2403:6a40:0:$IPC::1"
+        fi
+
+        # Xác định đường dẫn tệp cấu hình Netplan phù hợp
+        if [ "$INTERFACE" == "ens160" ]; then
+            NETPLAN_PATH="/etc/netplan/99-netcfg-vmware.yaml"
+        elif [ "$INTERFACE" == "eth0" ]; then
+            NETPLAN_PATH="/etc/netplan/50-cloud-init.yaml"
+        else
+            echo "Không tìm thấy card mạng phù hợp."
+            exit 1
+        fi
+
+        # Đọc và cập nhật tệp cấu hình Netplan
+        NETPLAN_CONFIG=$(cat "$NETPLAN_PATH")
+        NEW_NETPLAN_CONFIG=$(sed "/gateway4:/i \ \ \ \ \ \ \  - $IPV6_ADDRESS" <<< "$NETPLAN_CONFIG")
+        NEW_NETPLAN_CONFIG=$(sed "/gateway4:.*/a \ \ \ \ \  gateway6: $GATEWAY" <<< "$NEW_NETPLAN_CONFIG")
+        echo "$NEW_NETPLAN_CONFIG" > "$NETPLAN_PATH"
+
+        # Áp dụng cấu hình Netplan
+        sudo netplan apply
+
+        echo "Giao diện mạng: $INTERFACE"
+        echo "IPv4: $IP4"
+        echo "IPv6: $IP6"
+        echo "Gateway IPv4: $GATEWAY4"
+        echo "Gateway IPv6: $GATEWAY6"
+        echo "Cấu hình IPv6 cho Ubuntu hoàn tất."
+
+    else
+        echo "Hệ điều hành không được hỗ trợ."
+        exit 1
     fi
-
-    echo "Các gói cần thiết đã được cài đặt trên Ubuntu."
 }
 
-# Kiểm tra và cài đặt các gói cần thiết trên CentOS
-check_and_install_centos() {
-    echo "Kiểm tra và cài đặt các gói cần thiết trên CentOS..."
-
-    if ! command -v firewalld &> /dev/null; then
-        sudo yum install -y firewalld
-        sudo systemctl enable firewalld
-        sudo systemctl start firewalld
-    fi
-
-    echo "Các gói cần thiết đã được cài đặt trên CentOS."
-}
-
-# Lấy thông tin mạng
+# Gọi hàm để lấy thông tin và cấu hình IPv6
 get_network_info
-
-# Tự động phát hiện hệ điều hành và cấu hình IP tĩnh
-if [ -f /etc/debian_version ]; then
-    configure_ubuntu
-elif [ -f /etc/redhat-release ]; then
-    configure_centos
-else
-    echo "Hệ điều hành không được hỗ trợ."
-fi
