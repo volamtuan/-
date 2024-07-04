@@ -79,7 +79,7 @@ check_and_install_ubuntu() {
 
     if ! command -v netplan &> /dev/null; then
         sudo apt update
-        sudo apt install -y netplan
+        sudo apt install -y netplan.io
     fi
 
     echo "Các gói cần thiết đã được cài đặt trên Ubuntu."
@@ -98,40 +98,14 @@ check_and_install_centos() {
     echo "Các gói cần thiết đã được cài đặt trên CentOS."
 }
 
-# Kiểm tra hệ điều hành và gọi hàm cấu hình phù hợp
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
-        # Ubuntu
-        get_network_info
-        configure_ubuntu
-    elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
-        # CentOS
-        get_network_info
-        configure_centos
-    else
-        echo "Hệ điều hành không được hỗ trợ bởi script này."
-        exit 1
-    fi
+# Lấy thông tin mạng
+get_network_info
+
+# Tự động phát hiện hệ điều hành và cấu hình IP tĩnh
+if [ -f /etc/debian_version ]; then
+    configure_ubuntu
+elif [ -f /etc/redhat-release ]; then
+    configure_centos
 else
-    echo "Không tìm thấy tệp /etc/os-release."
-    exit 1
+    echo "Hệ điều hành không được hỗ trợ."
 fi
-
-# Ping kiểm tra kết nối sau khi cấu hình
-echo "Ping kiểm tra kết nối..."
-ping -c 4 8.8.8.8
-ping -6 -c 4 google.com
-
-# Khởi động lại dịch vụ mạng
-echo "Khởi động lại dịch vụ mạng..."
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
-        sudo systemctl restart network-manager
-    elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
-        sudo systemctl restart network
-    fi
-fi
-
-echo "Cấu hình hoàn tất."
