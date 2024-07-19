@@ -52,7 +52,10 @@ gen_3proxy_cfg() {
     echo "stacksize 6291456"
     echo "flush"
     echo "auth none"
-    echo "allow *"
+    echo "allow * * *"
+    echo "allow * * 0.0.0.0/0"
+    echo "allow * * ::/0"
+    
     port=$START_PORT
     while read ip; do
         echo "proxy -6 -n -a -p$port -i$IP4 -e$ip"
@@ -109,7 +112,7 @@ fi
 IFCFG="$main_interface"
 WORKDIR="/home/xpx/vivucloud"
 START_PORT=50000
-MAXCOUNT=1000
+MAXCOUNT=1000  # Adjust this value as needed
 
 # Generate IPv6 addresses and configurations
 echo "Đang tạo $MAXCOUNT IPV6 > ipv6.txt"
@@ -120,7 +123,7 @@ gen_ifconfig > $WORKDIR/boot_ifconfig.sh
 # Setup 3proxy and iptables
 systemctl disable --now firewalld
 service iptables stop
-gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+gen_3proxy_cfg > /usr/local/etc/3proxy/3proxy.cfg
 killall 3proxy
 service 3proxy start
 
@@ -138,19 +141,20 @@ upload_proxy
 
 # Function to generate rotation script
 gen_xoay() {
-    cat <<EOF > /home/xpx/vivucloud/xoay.sh
+    cat <<EOF > xoay.sh
 #!/usr/bin/bash
 echo "Đang tạo $MAXCOUNT IPV6 > ipv6.txt"
 gen_ipv6_64
 echo "Đang tạo IPV6 gen_ifconfig.sh"
 gen_ifconfig > $WORKDIR/boot_ifconfig.sh
 echo "3proxy Start"
-gen_3proxy_cfg > /etc/3proxy/3proxy.cfg
+gen_3proxy_cfg > /usr/local/etc/3proxy/3proxy.cfg
 killall 3proxy
 service 3proxy start
 echo "Đã Reset IP"
 EOF
-    chmod +x /home/xpx/vivucloud/xoay.sh
+    mv xoay.sh /home/xpx/vivucloud
+    chmod -R 777 /home/xpx/vivucloud
 }
 gen_xoay
 
@@ -158,8 +162,7 @@ echo "Tạo cấu hình xoay.sh"
 echo "1.sh done"
 
 # Tạo file cấu hình cho dịch vụ 3proxy
-cat <<EOF > /etc/systemd/system/3proxy.service
-[Unit]
+echo "[Unit]
 Description=3proxy Proxy Server
 After=network.target
 
@@ -168,11 +171,10 @@ Type=simple
 ExecStart=/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 Restart=always
 RestartSec=5   # Thời gian chờ giữa các lần khởi động lại (tùy chọn)
-ExecStop=/bin/kill -SIGINT \$MAINPID   # Lệnh dừng dịch vụ 3proxy
+ExecStop=/bin/kill -SIGINT $MAINPID   # Lệnh dừng dịch vụ 3proxy
 
 [Install]
-WantedBy=multi-user.target
-EOF
+WantedBy=multi-user.target" | sudo tee /etc/systemd/system/3proxy.service
 
 # Tải lại systemctl
 systemctl daemon-reload
