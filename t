@@ -83,7 +83,7 @@ gen_data() {
 
 gen_ifconfig() {
     cat <<EOF
-$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
+$(awk -F "/" '{print "ifconfig ens192 inet6 add " $5 "/64"}' ${WORKDATA})
 EOF
 }
 
@@ -117,7 +117,7 @@ install_3proxy
 echo "working folder = $WORKDIR"
 mkdir -p $WORKDIR && cd $WORKDIR
 
-IP4=$(ip -4 addr show eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+IP4=$(ip -4 addr show ens192 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
 IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 
 echo "Internal IP = ${IP4}. External sub for IP6 = ${IP6}"
