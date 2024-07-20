@@ -1,0 +1,148 @@
+#!/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+WORKDIR="/proxy"
+WORKDATA="${WORKDIR}/data.txt"
+API_URL="http://localhost:5000/get_ipv6"
+
+# Install dependencies
+echo "Installing dependencies..."
+sudo apt update -y
+sudo apt install -y python3 python3-pip curl jq wget gcc make
+
+# Install Flask
+echo "Installing Flask..."
+pip3 install Flask
+
+# Create Flask app
+echo "Creating Flask app..."
+cat <<EOF > app.py
+from flask import Flask, jsonify
+import random
+
+app = Flask(__name__)
+
+# Array of characters to create IPv6 addresses
+array = '0123456789abcdef'
+
+# Function to generate a random IPv6 address
+def gen_ipv6():
+    ip64 = lambda: ''.join(random.choice(array) for _ in range(4))
+    ipv6 = "2401:c080:2000:22bf:{}:{}:{}:{}:{}:{}:{}:{}".format(
+        ip64(), ip64(), ip64(), ip64(), ip64(), ip64(), ip64(), ip64()
+    )
+    return ipv6
+
+@app.route('/get_ipv6', methods=['GET'])
+def get_ipv6():
+    ipv6 = gen_ipv6()
+    return jsonify({'ipv6': ipv6})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+EOF
+
+# Run Flask app in the background
+echo "Starting Flask app..."
+nohup python3 app.py > flask.log 2>&1 &
+
+# Create proxy setup script
+echo "Creating proxy setup script..."
+cat <<'EOF' > /usr/local/bin/setup_proxy.sh
+#!/bin/bash
+WORKDIR="/proxy"
+WORKDATA="${WORKDIR}/data.txt"
+API_URL="http://localhost:5000/get_ipv6"
+
+random() {
+    tr </dev/urandom -dc A-Za-z0-9 | head -c5
+    echo
+}
+
+# Generate proxy data
+gen_data() {
+    seq $FIRST_PORT $LAST_PORT | while read port; do
+        IPV6=$(curl -s $API_URL | jq -r '.ipv6')
+        echo "//$IP4/$port/$IPV6"
+    done
+}
+
+# Configure system to restart proxy if it stops
+setup_proxy_restart() {
+    cat <<EOF > /etc/systemd/system/proxy.service
+[Unit]
+Description=Custom Proxy Service
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/custom_proxy_script.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable proxy.service
+    systemctl start proxy.service
+}
+
+# Create proxy script
+generate_proxy_script() {
+    cat <<'EOF' > /usr/local/bin/custom_proxy_script.sh
+#!/bin/bash
+
+# Proxy command here
+echo "Proxy script is running..."
+
+# Get IPv6 list and configure ports
+IP4=$(curl -4 -s icanhazip.com)
+
+FIRST_PORT=22000
+LAST_PORT=22009
+API_URL="http://localhost:5000/get_ipv6"
+
+gen_data() {
+    seq $FIRST_PORT $LAST_PORT | while read port; do
+        IPV6=$(curl -s $API_URL | jq -r '.ipv6')
+        echo "//$IP4/$port/$IPV6"
+    done
+}
+
+gen_data >$WORKDIR/data.txt
+
+# Create and start proxy
+while read line; do
+    PORT=$(echo $line | cut -d '/' -f 3)
+    IPV6=$(echo $line | cut -d '/' -f 4)
+    # Start proxy for each port with the corresponding IPv6 address
+    # Add your specific proxy startup command here
+done < $WORKDIR/data.txt
+
+EOF
+    chmod +x /usr/local/bin/custom_proxy_script.sh
+}
+
+echo "Setting up proxy..."
+mkdir -p $WORKDIR
+IP4=$(curl -4 -s icanhazip.com)
+
+FIRST_PORT=22000
+LAST_PORT=22009
+
+gen_data >$WORKDIR/data.txt
+
+generate_proxy_script
+setup_proxy_restart
+
+EOF
+
+# Make the proxy setup script executable
+chmod +x /usr/local/bin/setup_proxy.sh
+
+# Run the proxy setup script
+echo "Running proxy setup script..."
+sudo /usr/local/bin/setup_proxy.sh
+
+echo "Setup completed."
