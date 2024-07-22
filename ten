@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# Define old and new interface names
+OLD_IFACE="ens3"
+NEW_IFACE="eth0"
+
+# Check if the script is run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "This script must be run as root."
+    exit 1
+fi
+
+# Function to rename network interface
+rename_iface() {
+    # Ensure the old interface exists
+    if ! ip link show "$OLD_IFACE" >/dev/null 2>&1; then
+        echo "Interface $OLD_IFACE does not exist."
+        exit 2
+    fi
+
+    # Bring down the old interface
+    ip link set "$OLD_IFACE" down
+
+    # Rename the interface
+    ip link set "$OLD_IFACE" name "$NEW_IFACE"
+
+    # Bring up the new interface
+    ip link set "$NEW_IFACE" up
+
+    echo "Network interface renamed from $OLD_IFACE to $NEW_IFACE."
+}
+
+# Update Netplan configuration (for Ubuntu 18.04+)
+update_netplan() {
+    NETPLAN_FILE="/etc/netplan/*.yaml"
+
+    if ls $NETPLAN_FILE >/dev/null 2>&1; then
+        echo "Updating Netplan configuration..."
+        for FILE in $NETPLAN_FILE; do
+            sed -i "s/$OLD_IFACE/$NEW_IFACE/g" "$FILE"
+        done
+        netplan apply
+        echo "Netplan configuration updated."
+    else
+        echo "No Netplan configuration file found."
+    fi
+}
+
+# Update network-scripts configuration (for CentOS/RHEL)
+update_network_scripts() {
+    NETWORK_SCRIPTS_DIR="/etc/sysconfig/network-scripts"
+    if [ -d "$NETWORK_SCRIPTS_DIR" ]; then
+        echo "Updating network-scripts configuration..."
+        for FILE in "$NETWORK_SCRIPTS_DIR/ifcfg-$OLD_IFACE"; do
+            if [ -f "$FILE" ]; then
+                mv "$FILE" "$NETWORK_SCRIPTS_DIR/ifcfg-$NEW_IFACE"
+                sed -i "s/$OLD_IFACE/$NEW_IFACE/g" "$NETWORK_SCRIPTS_DIR/ifcfg-$NEW_IFACE"
+            fi
+        done
+        echo "Network-scripts configuration updated."
+    else
+        echo "No network-scripts directory found."
+    fi
+}
+
+# Check the current interface name
+current_iface=$(ip -o link show | awk -F': ' '{print $2}')
+
+echo "Current network interface name: $current_iface"
+
+# Rename interface if it matches the old name
+if [ "$current_iface" == "$OLD_IFACE" ]; then
+    rename_iface
+
+    # Update configuration based on system
+    if [ -d "/etc/netplan" ]; then
+        update_netplan
+    elif [ -d "/etc/sysconfig/network-scripts" ]; then
+        update_network_scripts
+    else
+        echo "No supported network configuration found."
+    fi
+
+    # Restart networking service
+    if command -v systemctl >/dev/null; then
+        systemctl restart networking
+    else
+        /etc/init.d/networking restart
+    fi
+
+    echo "Network interface rename process complete."
+else
+    echo "The interface $OLD_IFACE does not match the current network interface $current_iface."
+fi
