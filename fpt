@@ -1,0 +1,139 @@
+#!/bin/bash
+
+# Biến
+WEB_ROOT="/var/www/html/update"
+UPDATE_FILE="/var/www/html/upfile"
+
+
+# Cập nhật hệ thống
+echo "Updating system..."
+sudo yum update -y
+
+# Cài đặt Apache và PHP
+echo "Installing Apache and PHP..."
+sudo yum install -y httpd php
+
+# Khởi động và cấu hình Apache
+echo "Starting and enabling Apache..."
+sudo systemctl start httpd
+sudo systemctl enable httpd
+
+# Tạo thư mục web và tải lên tệp tin cập nhật
+echo "Setting up web directory..."
+sudo mkdir -p $WEB_ROOT
+sudo cp $UPDATE_FILE $WEB_ROOT/
+
+# Tạo file HTML
+echo "Creating index.html..."
+sudo bash -c 'cat <<EOF > /var/www/html/update/index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Page</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to the Update Page</h1>
+        <p>Here you can download the latest update.</p>
+        <a href="update.exe" class="download-button">Download Update</a>
+    </div>
+</body>
+</html>
+EOF'
+
+# Tạo file CSS
+echo "Creating styles.css..."
+sudo bash -c 'cat <<EOF > /var/www/html/update/styles.css
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    color: #333;
+    text-align: center;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 50px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+p {
+    font-size: 18px;
+    margin-bottom: 30px;
+}
+
+.download-button {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 18px;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 5px;
+    text-decoration: none;
+}
+
+.download-button:hover {
+    background-color: #0056b3;
+}
+EOF'
+
+#!/bin/bash
+
+# Biến cấu hình
+IPADDR="192.168.1.100"
+NETMASK="255.255.255.0"
+GATEWAY="192.168.1.1"
+DNS1="8.8.8.8"
+DNS2="8.8.4.4"
+INTERFACE="eth0"
+
+# Biến cấu hình IPv6
+IPV6_ADDRESS="2001:db8::1"
+IPV6_DEFAULTGW="2001:db8::ff"
+
+# Cấu hình IP tĩnh
+echo "Configuring static IP..."
+sudo bash -c "cat <<EOF > /etc/sysconfig/network-scripts/ifcfg-$INTERFACE
+DEVICE=$INTERFACE
+BOOTPROTO=static
+ONBOOT=yes
+IPADDR=$IPADDR
+NETMASK=$NETMASK
+GATEWAY=$GATEWAY
+DNS1=$DNS1
+DNS2=$DNS2
+IPV6INIT=yes
+IPV6_AUTOCONF=no
+IPV6_DEFROUTE=yes
+IPV6_FAILURE_FATAL=no
+IPV6_ADDR_GEN_MODE=stable-privacy
+IPV6ADDR=$IPV6_ADDRESS/64
+IPV6_DEFAULTGW=$IPV6_DEFAULTGW
+EOF"
+
+# Khởi động lại dịch vụ mạng
+echo "Restarting network service..."
+sudo systemctl restart network
+
+# Cài đặt và cấu hình tường lửa
+echo "Configuring firewall..."
+sudo firewall-cmd --zone=public --add-service=http --permanent
+sudo firewall-cmd --zone=public --add-service=https --permanent
+sudo firewall-cmd --reload
+
+# Kết thúc
+echo "Setup completed. Please visit http://$IPADDR/update to access your update page."
