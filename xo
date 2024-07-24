@@ -45,7 +45,7 @@ allow 127.0.0.1
 
 $(awk -F "/" '{print "\n" \
 "allow *" $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e"$5"\n" \
+"proxy -6 -n -a -p" $4 " -i0.0.0.0 -e"$5"\n" \
 "flush\n"}' ${WORKDATA})
 EOF
 }
@@ -53,7 +53,7 @@ EOF
 # Function to generate proxy file for user
 gen_proxy_file_for_user() {
     cat >proxy.txt <<EOF
-$(awk -F "/" '{print $3 ":" $4}' ${WORKDATA})
+$(awk -F "/" '{print $3 ":" $4 }' ${WORKDATA})
 EOF
 }
 
