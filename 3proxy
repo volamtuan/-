@@ -1,4 +1,4 @@
-##!/bin/sh
+#!/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 random() {
@@ -35,12 +35,15 @@ install_3proxy() {
     echo "net.ipv6.conf.default.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
     echo "net.ipv6.ip_nonlocal_bind = 1" >> /etc/sysctl.conf
+    sysctl -p
+    systemctl stop firewalld
+    systemctl disable firewalld
 }
 
 gen_3proxy() {
     cat <<EOF
 daemon
-maxconn 5000
+maxconn 10000
 nserver 1.1.1.1
 nserver 8.8.4.4
 nserver 2001:4860:4860::8888
@@ -92,7 +95,7 @@ rotate_ipv6() {
     IP6="2001:ee0:4f0c:8b40"
     
     # Sinh dữ liệu mới
-    gen_data > "$WORKDIR/$WORKDATA"
+    gen_data > "$WORKDIR/$WORKDATA/data.txt"
     
     # Tạo và áp dụng cấu hình mạng IPv6
     gen_ifconfig > "$WORKDIR/boot_ifconfig.sh"
@@ -200,3 +203,7 @@ systemctl disable firewalld
 
 echo “Tổng số IPv6 hiện tại:”
 ip -6 addr | grep inet6 | wc -l
+while true; do
+    rotate_ipv6
+    sleep 600
+done
