@@ -66,8 +66,8 @@ install_3proxy() {
     mkdir -p /usr/local/etc/3proxy/bin
     mkdir -p /usr/local/etc/3proxy/logs
     mkdir -p /usr/local/etc/3proxy/stat
-    cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "Failed to copy 3proxy binary! Exiting..."; exit 1; }
-    cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Proxy init script not found! Exiting..."; exit 1; }
+    cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "Failed to copy 3proxy binary! Exiting..."; }
+    cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Proxy init script not found! Exiting..."; }
     chmod +x /etc/init.d/3proxy
     chkconfig 3proxy on
     cd "$WORKDIR" || { echo "Failed to change directory to $WORKDIR"; }
