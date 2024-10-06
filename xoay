@@ -20,10 +20,10 @@ install_3proxy() {
     echo "Installing 3proxy..."
     sudo yum install git gcc make -y  # Cài đặt các gói cần thiết
     git clone https://github.com/z3APA3A/3proxy.git  # Clone repository
-    cd 3proxy || { echo "3proxy directory not found! Exiting..."; exit 1; }  # Chuyển đến thư mục 3proxy
-    make -f Makefile.Linux || { echo "Make failed! Exiting..."; exit 1; }  # Biên dịch 3proxy
-    sudo make install || { echo "Installation failed! Exiting..."; exit 1; }  # Cài đặt
-    cd - || exit  # Quay lại thư mục trước
+    cd 3proxy || { echo "3proxy directory not found! Exiting..."; }  # Chuyển đến thư mục 3proxy
+    make -f Makefile.Linux || { echo "Make failed! Exiting..."; }  # Biên dịch 3proxy
+    sudo make install || { echo "Installation failed! Exiting..."; }  # Cài đặt
+    cd ${WORKDIR} 
 }
 
 # Tạo cấu hình cho 3proxy
