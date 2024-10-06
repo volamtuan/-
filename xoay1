@@ -9,7 +9,7 @@ IP6_PREFIX=$(curl -6 -s icanhazip.com | cut -f1-4 -d':') # Lấy prefix IPv6
 
 # Định nghĩa dải cổng cần xoay
 START_PORT=20000
-END_PORT=25000
+END_PORT=21000
 
 # Mảng chứa các giá trị hex để tạo IPv6 ngẫu nhiên
 array=(1 2 3 4 5 6 7 8 9 0 a b c d e f)
