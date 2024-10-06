@@ -53,16 +53,24 @@ install_3proxy() {
     echo "Installing 3proxy..."
     URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
     wget -qO- "$URL" | tar -zxvf -  # Giải nén tệp tải về
-    cd 3proxy-0.9.4 || { echo "3proxy folder not found! Exiting..."; exit 1; }  # Kiểm tra thư mục tồn tại
-    make -f Makefile.Linux || { echo "Makefile.Linux not found! Exiting..."; exit 1; }  # Kiểm tra makefile tồn tại
+    cd 3proxy-0.9.4 || { echo "3proxy folder not found! Exiting..."; }  # Kiểm tra thư mục tồn tại
+    if [ ! -f "Makefile.Linux" ]; then
+        echo "Makefile.Linux not found! Please check the source files."
+        exit 1
+    fi
+    make -f Makefile.Linux || { echo "Make failed! Exiting..."; }  # Kiểm tra makefile tồn tại
+    if [ ! -f "src/3proxy" ]; then
+        echo "3proxy binary not found! Exiting..."
+        exit 1
+    fi
     mkdir -p /usr/local/etc/3proxy/bin
     mkdir -p /usr/local/etc/3proxy/logs
     mkdir -p /usr/local/etc/3proxy/stat
-    #cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "3proxy binary not found! Exiting..."; exit 1; }
-    #cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Proxy init script not found! Exiting..."; exit 1; }
-    #chmod +x /etc/init.d/3proxy
-    #chkconfig 3proxy on
-    cd "$WORKDIR" || { echo "Failed to change directory to $WORKDIR"; exit 1; }
+    cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "Failed to copy 3proxy binary! Exiting..."; exit 1; }
+    cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Proxy init script not found! Exiting..."; exit 1; }
+    chmod +x /etc/init.d/3proxy
+    chkconfig 3proxy on
+    cd "$WORKDIR" || { echo "Failed to change directory to $WORKDIR"; }
 }
 
 # Tạo cấu hình cho 3proxy
