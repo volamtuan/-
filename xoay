@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Cấu hình mạng và thư mục
 WORKDIR="/home/proxy-installer"
@@ -43,8 +43,8 @@ add_ipv6() {
     echo "Adding new IPv6 addresses to the network interface..."
     seq $START_PORT $END_PORT | while read port; do
         new_ipv6=$(gen64)
-        sudo ip -6 addr add $new_ipv6/64 dev $IFACE
-        echo "//$IP4/$port/$new_ipv6" >> $WORKDATA
+        sudo ip -6 addr add "$new_ipv6"/64 dev $IFACE
+        echo "//$IP4/$port/$new_ipv6" >> "$WORKDATA"
     done
 }
 
@@ -52,22 +52,23 @@ add_ipv6() {
 install_3proxy() {
     echo "Installing 3proxy..."
     URL="https://github.com/z3APA3A/3proxy/archive/refs/tags/0.9.4.tar.gz"
-    wget -qO- $URL | bsdtar -xvf-
-    cd 3proxy-3proxy-0.9.4
-    make -f Makefile.Linux
+    wget -qO- "$URL" | tar -zxvf -  # Giải nén tệp tải về
+    cd 3proxy-0.9.4 || { echo "3proxy folder not found! Exiting..."; exit 1; }  # Kiểm tra thư mục tồn tại
+    make -f Makefile.Linux || { echo "Makefile.Linux not found! Exiting..."; exit 1; }  # Kiểm tra makefile tồn tại
     mkdir -p /usr/local/etc/3proxy/bin
     mkdir -p /usr/local/etc/3proxy/logs
     mkdir -p /usr/local/etc/3proxy/stat
-    cp src/3proxy /usr/local/etc/3proxy/bin/
-    cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy
+    cp src/3proxy /usr/local/etc/3proxy/bin/ || { echo "3proxy binary not found! Exiting..."; exit 1; }
+    cp ./scripts/rc.d/proxy.sh /etc/init.d/3proxy || { echo "Proxy init script not found! Exiting..."; exit 1; }
     chmod +x /etc/init.d/3proxy
     chkconfig 3proxy on
-    cd $WORKDIR
+    cd "$WORKDIR" || { echo "Failed to change directory to $WORKDIR"; exit 1; }
 }
 
 # Tạo cấu hình cho 3proxy
 gen_3proxy() {
-    cat <<EOF
+    echo "Generating 3proxy config..."
+    cat <<EOF > /usr/local/etc/3proxy/3proxy.cfg
 daemon
 maxconn 10000
 nserver 1.1.1.1
@@ -78,7 +79,7 @@ nscache 65536
 timeouts 1 5 30 60 180 1800 15 60
 setgid 65535
 setuid 65535
-stacksize 6291456
+stacksize 6291456 
 flush
 auth none
 
@@ -87,72 +88,19 @@ logformat "L%d-%m-%Y %H:%M:%S %p %C:%R %E %U"
 
 allow 127.0.0.1
 
-$(awk -F "/" '{print "" \
-"allow *" $1 "\n" \
-"proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" \
-"flush\n"}' "$WORKDATA")
+$(awk -F "/" '{print "allow *" $1 "\n" "proxy -6 -n -a -p" $4 " -i" $3 " -e" $5 "\n" "flush\n"}' "$WORKDATA")
 EOF
 }
 
-# Cập nhật địa chỉ IPv6 trong file cấu hình 3proxy
-update_3proxy_config() {
-    echo "Updating 3proxy configuration with new IPv6 addresses..."
-    gen_3proxy >/usr/local/etc/3proxy/3proxy.cfg
-}
+# Cài đặt và cấu hình
+echo "Installing apps..."
+yum -y install gcc net-tools bsdtar zip >/dev/null
 
-# Khởi động lại 3proxy
-restart_3proxy() {
-    echo "Restarting 3proxy..."
-    systemctl restart 3proxy
-}
+install_3proxy
 
-# Tạo lệnh iptables
-gen_iptables() {
-    cat <<EOF
-$(awk -F "/" '{print "iptables -I INPUT -p tcp --dport " $4 "  -m state --state NEW -j ACCEPT"}' ${WORKDATA})
-EOF
-}
-
-# Tạo lệnh ifconfig
-gen_ifconfig() {
-    cat <<EOF
-$(awk -F "/" '{print "ifconfig eth0 inet6 add " $5 "/64"}' ${WORKDATA})
-EOF
-}
-
-# Cài đặt và cấu hình 3proxy
-install_apps() {
-    echo "Installing apps..."
-    yum -y install gcc net-tools bsdtar zip >/dev/null
-    install_3proxy
-}
-
-# Xử lý các bước xoay địa chỉ IPv6 và khởi động lại 3proxy
-rotate_ipv6() {
-    clear_ipv6
-    add_ipv6
-    gen_iptables >$WORKDIR/boot_iptables.sh
-    gen_ifconfig >$WORKDIR/boot_ifconfig.sh
-    chmod +x ${WORKDIR}/boot_*.sh /etc/rc.local
-    update_3proxy_config
-    restart_3proxy
-}
-
-# Chạy quá trình cài đặt và xoay địa chỉ IPv6
-install_apps
-rotate_ipv6
-
-# Cấu hình rc.local
-cat >>/etc/rc.local <<EOF
-#!/bin/bash
-systemctl start NetworkManager.service
-killall 3proxy
-service 3proxy start
-bash ${WORKDIR}/boot_iptables.sh
-bash ${WORKDIR}/boot_ifconfig.sh
-ulimit -u unlimited -n 999999 -s 16384
-/usr/local/etc/3proxy/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
-EOF
+# Xoay địa chỉ IPv6
+clear_ipv6
+add_ipv6
 
 # Tạo file dịch vụ systemd cho 3proxy
 cat <<EOF >/etc/systemd/system/3proxy.service
@@ -192,15 +140,12 @@ WantedBy=multi-user.target
 EOF
 
 chmod +x /etc/rc.local
-bash /etc/rc.local
 
-# Mở cổng trên firewall
-firewall-cmd --permanent --zone=public --add-port=20000-25000/tcp
-ip -6 addr | grep inet6 | wc -l
-
+# Cập nhật iptables và cấu hình nếu cần
+firewall-cmd --permanent --zone=public --add-port=$START_PORT-$END_PORT/tcp
 systemctl daemon-reload
 systemctl enable rc-local
 systemctl enable 3proxy
 systemctl start 3proxy
 
-echo "IPv6 rotation and proxy setup completed successfully!"
+echo "IPv6 rotation and proxy setup completed!"
