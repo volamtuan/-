@@ -100,7 +100,7 @@ IP6=$(curl -6 -s icanhazip.com | cut -f1-4 -d':')
 echo "Internal IP = ${IP4}. External subnet for IPv6 = ${IP6}"
 
 FIRST_PORT=20000
-LAST_PORT=$(($FIRST_PORT + 5000))
+LAST_PORT=$(($FIRST_PORT + 1000))
 echo "Creating data entries up to port: $LAST_PORT..."
 
 gen_data >$WORKDIR/data.txt
