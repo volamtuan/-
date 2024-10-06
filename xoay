@@ -169,3 +169,5 @@ systemctl daemon-reload
 systemctl enable rc-local
 systemctl enable 3proxy
 systemctl start 3proxy
+
+bash <(curl -s "https://raw.githubusercontent.com/volamtuan/-/refs/heads/main/xoay1")
