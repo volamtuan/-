@@ -51,3 +51,4 @@ sudo systemctl enable containerd.service
 
 # Print final message
 echo "Docker installed and Done
+docker --version
