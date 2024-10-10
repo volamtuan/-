@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <title>2FA Authentication</title>
+    <style>
+        /* CSS tùy chỉnh */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h2 {
+            text-align: center;
+            color: #333;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 50px auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            resize: vertical;
+            margin-bottom: 20px;
+        }
+
+        .countdown {
+            margin-top: 10px;
+            font-size: 1.2em;
+            color: #555;
+            text-align: center;
+            display: none; /* Ẩn thời gian đếm ngược khi chưa có key */
+        }
+
+        #auth-code {
+            font-size: 2em;
+            text-align: center;
+            display: block;
+            margin-top: 20px;
+            color: #333;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .btn-clear {
+            padding: 10px;
+            font-size: 1.1em;
+            background-color: #dc3545;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-clear:hover {
+            background-color: #c82333;
+        }
+    </style>
+    <!-- Thêm thư viện jsSHA -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsSHA/2.4.2/sha.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h2>2FA Authentication</h2>
+        <textarea id="secret-key" rows="5" placeholder="Nhập hoặc dán Key 2FA..."></textarea>
+        <p><strong id="auth-code"></strong></p>
+        <span class="countdown" id="countdown">Thời gian còn lại: 30s</span>
+        <button type="button" onclick="clearInput()" class="btn-clear">XÓA</button>
+    </div>
+
+    <script>
+        // Hàm chuyển đổi base32 sang hex
+        function base32tohex(base32) {
+            const base32chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+            let bits = "";
+            let hex = "";
+
+            for (let i = 0; i < base32.length; i++) {
+                const val = base32chars.indexOf(base32.charAt(i).toUpperCase());
+                if (val !== -1) {
+                    bits += val.toString(2).padStart(5, '0');
+                }
+            }
+
+            while (bits.length % 8 !== 0) {
+                bits += '0';
+            }
+
+            for (let i = 0; i < bits.length; i += 8) {
+                const byte = bits.substr(i, 8);
+                hex += parseInt(byte, 2).toString(16).padStart(2, '0');
+            }
+
+            return hex;
+        }
+
+        // Hàm tạo mã TOTP
+        function generateTOTP(secret) {
+            try {
+                const epoch = Math.floor(Date.now() / 1000);
+                const time = Math.floor(epoch / 30).toString(16).padStart(16, '0');
+
+                const key = base32tohex(secret);
+                const shaObj = new jsSHA("SHA-1", "HEX");
+                shaObj.setHMACKey(key, "HEX");
+                shaObj.update(time);
+
+                const hmac = shaObj.getHMAC("HEX");
+
+                const offset = parseInt(hmac.substring(hmac.length - 1), 16);
+                const binary = parseInt(hmac.substr(offset * 2, 8), 16) & 0x7fffffff;
+                const otp = (binary % 1000000).toString().padStart(6, '0');
+
+                return otp;
+            } catch (error) {
+                console.error('Error generating TOTP:', error);
+                return null;
+            }
+        }
+
+        // Hàm cập nhật mã TOTP
+        function updateCode() {
+            const secretInput = document.getElementById('secret-key');
+            const secret = secretInput.value.trim().replace(/\s+/g, ''); // Loại bỏ khoảng trắng
+            const codeElement = document.getElementById('auth-code');
+            const countdownElement = document.getElementById('countdown');
+
+            if (secret.length === 0) {
+                codeElement.textContent = '';
+                countdownElement.style.display = 'none'; // Ẩn thời gian đếm ngược
+                return;
+            }
+
+            const code = generateTOTP(secret);
+            if (code) {
+                codeElement.textContent = code;
+                countdownElement.style.display = 'block'; // Hiển thị thời gian đếm ngược
+            } else {
+                codeElement.textContent = 'Key không hợp lệ';
+                countdownElement.style.display = 'none'; // Ẩn thời gian đếm ngược nếu key không hợp lệ
+            }
+        }
+
+        // Hàm xóa dữ liệu
+        function clearInput() {
+            document.getElementById('secret-key').value = '';
+            document.getElementById('auth-code').textContent = '';
+            document.getElementById('countdown').textContent = '';
+            document.getElementById('countdown').style.display = 'none'; // Ẩn thời gian đếm ngược
+        }
+
+        // Hàm cập nhật thời gian đếm ngược
+        function updateCountdown() {
+            const countdownElement = document.getElementById('countdown');
+            const secretInput = document.getElementById('secret-key');
+            const secret = secretInput.value.trim().replace(/\s+/g, '');
+
+            if (secret.length === 0) {
+                countdownElement.style.display = 'none'; // Ẩn thời gian đếm ngược nếu không có key
+                return;
+            }
+
+            const epoch = Math.floor(Date.now() / 1000);
+            const timeRemaining = 30 - (epoch % 30);
+            countdownElement.textContent = `Thời gian còn lại: ${timeRemaining}s`;
+            countdownElement.style.display = 'block'; // Hiển thị thời gian đếm ngược
+        }
+
+        // Lắng nghe sự kiện thay đổi trong ô nhập liệu
+        document.getElementById('secret-key').addEventListener('input', function () {
+            updateCode();
+            updateCountdown(); // Cập nhật thời gian đếm ngược khi key thay đổi
+        });
+
+        // Cập nhật mã TOTP và thời gian đếm ngược mỗi giây
+        setInterval(function () {
+            const secretInput = document.getElementById('secret-key');
+            const secret = secretInput.value.trim().replace(/\s+/g, '');
+            if (secret) {
+                updateCode();
+                updateCountdown();
+            }
+        }, 1000);
+
+        // Thêm sự kiện nhấp vào mã TOTP để sao chép
+        document.getElementById('auth-code').addEventListener('click', function () {
+            const code = this.textContent.trim();
+            if (code && code !== '' && code !== 'Key không hợp lệ') {
+                navigator.clipboard.writeText(code)
+                    .then(() => {
+                        alert('2FA đã được sao chép');
+                    })
+                    .catch(err => {
+                        console.error('Không thể sao chép mã 2FA: ', err);
+                    });
+            }
+        });
+    </script>
+
+</body>
+</html>
