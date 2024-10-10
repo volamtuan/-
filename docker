@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Detect the OS
+if [ -f /etc/centos-release ]; then
+    OS="centos"
+elif [ -f /etc/lsb-release ]; then
+    OS="ubuntu"
+else
+    echo "Unsupported OS"
+    exit 1
+fi
+
+echo "Detected OS: $OS"
+
+# Install Docker
+if [ "$OS" = "centos" ]; then
+    # Install Docker on CentOS
+    sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+    sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    sudo yum install -y docker-ce docker-ce-cli containerd.io
+    sudo systemctl start docker
+    sudo systemctl enable docker
+
+elif [ "$OS" = "ubuntu" ]; then
+    # Install Docker on Ubuntu
+    sudo apt-get update
+    sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+    sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+    sudo apt-get update
+    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
+    sudo systemctl start docker
+    sudo systemctl enable docker
+fi
+
+# Install Docker Compose (applicable for both OS)
+sudo curl -L "https://github.com/docker/compose/releases/download/1.23.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+
+# Add user to Docker group if not already existing (applicable for both OS)
+if [ $(getent group docker) ]; then
+    echo "Group 'docker' already exists"
+else
+    sudo groupadd docker
+fi
+sudo usermod -aG docker $USER
+
+# Enable Docker services (applicable for both OS)
+sudo systemctl enable docker.service
+sudo systemctl enable containerd.service
+
+# Print final message
+echo "Docker installed and Done
