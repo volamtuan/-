@@ -1,13 +1,14 @@
 #!/bin/bash
 
+#!/bin/bash
+
 # Detect the OS
 if [ -f /etc/centos-release ]; then
-    OS="centos"
+    echo "This is CentOS"
 elif [ -f /etc/lsb-release ]; then
-    OS="ubuntu"
+    echo "This is Ubuntu"
 else
     echo "Unsupported OS"
-    exit 1
 fi
 
 echo "Detected OS: $OS"
