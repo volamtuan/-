@@ -33,6 +33,7 @@ chmod +x /usr/local/etc/3proxy
 make -f Makefile.Linux
 sudo make install
 sudo chmod +x /usr/local/bin/3proxy
+
 # Cấu hình hệ thống cho tối ưu hóa số lượng kết nối mở
 echo "* hard nofile 999999" >> /etc/security/limits.conf
 echo "* soft nofile 999999" >> /etc/security/limits.conf
@@ -47,6 +48,7 @@ sysctl -p
 
 # Cấu hình 3proxy
 log "Tạo tệp cấu hình cho 3proxy..."
+
 
 sudo bash -c 'cat << EOF > /usr/local/etc/3proxy/3proxy.cfg
 daemon
@@ -65,10 +67,12 @@ auth none
 authcache 86400
 EOF'
 
-log "Tạo 1000 cổng proxy cho 3proxy từ 10000 đến 10999..."
+log "Tạo proxy từ cổng 10000 đến 11000 qua Tor với các cổng từ 20000 đến 21000..."
 
-sudo bash -c 'for i in {10000..10999}; do
-  echo "parent 1000 socks5+ 127.0.0.1 $((i + 10000))" >> /usr/local/etc/3proxy/3proxy.cfg
+# Tạo cấu hình 1000 cổng proxy HTTP, SOCKS5, và FTP thông qua các cổng Tor từ 20000 đến 21000
+sudo bash -c 'for i in {10000..11000}; do
+  tor_port=$((i + 10000))  # Cổng Tor tương ứng từ 20000 đến 21000
+  echo "parent 1000 socks5+ 127.0.0.1 $tor_port" >> /usr/local/etc/3proxy/3proxy.cfg
   echo "proxy -p$i" >> /usr/local/etc/3proxy/3proxy.cfg
   echo "socks -p$i" >> /usr/local/etc/3proxy/3proxy.cfg
   echo "ftppr -p$i" >> /usr/local/etc/3proxy/3proxy.cfg
@@ -84,7 +88,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/etc/3proxy /usr/local/etc/3proxy/3proxy.cfg
+ExecStart=/usr/local/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
 Restart=on-abort
 
 [Install]
@@ -94,8 +98,8 @@ EOF'
 # Khởi động và kích hoạt 3proxy
 log "Khởi động và kích hoạt 3proxy..."
 sudo systemctl daemon-reload
+sudo systemctl enable 3proxy
 sudo systemctl restart 3proxy
-
 
 # Mở các cổng firewall nếu cần
 log "Mở các cổng trên firewall (nếu sử dụng UFW hoặc Firewalld)..."
