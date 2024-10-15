@@ -1,0 +1,110 @@
+#!/bin/bash
+
+# Hàm log
+function log() {
+   echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [setup] $1"
+}
+
+# Cài đặt các gói cần thiết cho Ubuntu/Debian
+log "Cài đặt các gói cần thiết cho 3proxy..."
+if [ -f /etc/lsb-release ] || [ -f /etc/debian_version ]; then
+    OS="ubuntu"
+    PKG_MGR="apt"
+    sudo apt update
+    sudo apt install -y build-essential git curl net-tools
+elif [ -f /etc/redhat-release ]; then
+    OS="centos"
+    PKG_MGR="yum"
+    sudo yum install -y epel-release
+    sudo yum install -y gcc git curl net-tools
+else
+    log "Unsupported operating system."
+    exit 1
+fi
+
+# Clone và cài đặt 3proxy
+log "Cài đặt 3proxy..."
+git clone https://github.com/z3APA3A/3proxy
+cd 3proxy
+make -f Makefile.Linux
+sudo make install
+
+# Cấu hình hệ thống cho tối ưu hóa số lượng kết nối mở
+echo "* hard nofile 999999" >> /etc/security/limits.conf
+echo "* soft nofile 999999" >> /etc/security/limits.conf
+echo "fs.file-max = 1000000" >> /etc/sysctl.conf
+echo "net.ipv4.ip_local_port_range = 1024 65000" >> /etc/sysctl.conf
+echo "net.ipv4.tcp_fin_timeout = 30" >> /etc/sysctl.conf
+echo "net.core.somaxconn = 4096" >> /etc/sysctl.conf
+echo "net.core.netdev_max_backlog = 4096" >> /etc/sysctl.conf
+
+# Áp dụng các thay đổi cấu hình hệ thống
+sysctl -p
+
+# Cấu hình 3proxy
+log "Tạo tệp cấu hình cho 3proxy..."
+
+sudo bash -c 'cat << EOF > /etc/3proxy/3proxy.cfg
+daemon
+maxconn 10000
+nserver 1.1.1.1
+nserver 8.8.4.4
+nserver 2001:4860:4860::8888
+nserver 2001:4860:4860::8844
+nscache 65536
+timeouts 1 5 30 60 180 1800 15 60
+setgid 65535
+setuid 65535
+stacksize 6291456 
+flush
+auth none
+authcache 86400
+EOF'
+
+log "Tạo 1000 cổng proxy cho 3proxy từ 10000 đến 10999..."
+
+sudo bash -c 'for i in {10000..10999}; do
+  echo "parent 1000 socks5+ 127.0.0.1 $((i + 10000))" >> /etc/3proxy/3proxy.cfg
+  echo "proxy -p$i" >> /etc/3proxy/3proxy.cfg
+  echo "socks -p$i" >> /etc/3proxy/3proxy.cfg
+  echo "ftppr -p$i" >> /etc/3proxy/3proxy.cfg
+done'
+
+# Tạo dịch vụ systemd cho 3proxy
+log "Tạo dịch vụ systemd cho 3proxy..."
+
+sudo bash -c 'cat << EOF > /etc/systemd/system/3proxy.service
+[Unit]
+Description=3proxy Proxy Server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/3proxy /etc/3proxy/3proxy.cfg
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
+EOF'
+
+# Khởi động và kích hoạt 3proxy
+log "Khởi động và kích hoạt 3proxy..."
+sudo systemctl daemon-reload
+sudo systemctl enable 3proxy
+sudo systemctl start 3proxy
+
+# Mở các cổng firewall nếu cần
+log "Mở các cổng trên firewall (nếu sử dụng UFW hoặc Firewalld)..."
+if [ "$OS" == "ubuntu" ]; then
+    sudo ufw allow 10000:10999/tcp
+    sudo ufw reload
+elif [ "$OS" == "centos" ]; then
+    sudo firewall-cmd --permanent --add-port=10000-10999/tcp
+    sudo firewall-cmd --reload
+fi
+
+# Kiểm tra trạng thái 3proxy
+log "Kiểm tra trạng thái 3proxy..."
+sudo systemctl status 3proxy
+
+log "Hoàn thành cài đặt 3proxy với 1000 cổng proxy qua Tor!"
