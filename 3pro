@@ -26,6 +26,10 @@ fi
 log "Cài đặt 3proxy..."
 git clone https://github.com/z3APA3A/3proxy
 cd 3proxy
+mkdir -p /usr/local/bin/3proxy
+mkdir -p /usr/local/etc/3proxy
+chmod +x /usr/local/bin/3proxy
+chmod +x /usr/local/etc/3proxy
 make -f Makefile.Linux
 sudo make install
 sudo chmod +x /usr/local/bin/3proxy
@@ -80,7 +84,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/3proxy /usr/local/etc/3proxy/3proxy.cfg
+ExecStart=/usr/local/etc/3proxy /usr/local/etc/3proxy/3proxy.cfg
 Restart=on-abort
 
 [Install]
@@ -105,6 +109,7 @@ fi
 
 # Kiểm tra trạng thái 3proxy
 log "Kiểm tra trạng thái 3proxy..."
+sudo systemctl restart 3proxy
 sudo systemctl status 3proxy
 
 log "Hoàn thành cài đặt 3proxy với 1000 cổng proxy qua Tor!"
