@@ -28,7 +28,10 @@ git clone https://github.com/z3APA3A/3proxy
 cd 3proxy
 make -f Makefile.Linux
 sudo make install
-mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
+
+# Tạo thư mục cho tệp cấu hình 3proxy
+sudo mkdir -p /usr/local/etc/3proxy
+
 # Cấu hình hệ thống cho tối ưu hóa số lượng kết nối mở
 echo "* hard nofile 999999" >> /etc/security/limits.conf
 echo "* soft nofile 999999" >> /etc/security/limits.conf
