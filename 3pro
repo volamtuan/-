@@ -28,10 +28,7 @@ git clone https://github.com/z3APA3A/3proxy
 cd 3proxy
 make -f Makefile.Linux
 sudo make install
-
-# Tạo thư mục cho tệp cấu hình 3proxy
-sudo mkdir -p /usr/local/etc/3proxy
-
+sudo chmod +x /usr/local/bin/3proxy
 # Cấu hình hệ thống cho tối ưu hóa số lượng kết nối mở
 echo "* hard nofile 999999" >> /etc/security/limits.conf
 echo "* soft nofile 999999" >> /etc/security/limits.conf
@@ -93,8 +90,8 @@ EOF'
 # Khởi động và kích hoạt 3proxy
 log "Khởi động và kích hoạt 3proxy..."
 sudo systemctl daemon-reload
-sudo systemctl enable 3proxy
-sudo systemctl start 3proxy
+sudo systemctl restart 3proxy
+
 
 # Mở các cổng firewall nếu cần
 log "Mở các cổng trên firewall (nếu sử dụng UFW hoặc Firewalld)..."
