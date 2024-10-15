@@ -1,0 +1,106 @@
+#!/bin/bash
+
+# Hàm log
+function log() {
+   echo "$(date -u +"%Y-%m-%dT%H:%M:%SZ") [install] $1"
+}
+
+# Kiểm tra hệ điều hành và trình quản lý gói (Ubuntu/Debian vs CentOS/RHEL)
+if [ -f /etc/lsb-release ] || [ -f /etc/debian_version ]; then
+    OS="ubuntu"
+    PKG_MGR="apt"
+    UFW="ufw"
+elif [ -f /etc/redhat-release ]; then
+    OS="centos"
+    PKG_MGR="yum"
+    UFW="firewalld"
+else
+    log "Unsupported operating system."
+    exit 1
+fi
+
+log "Detected operating system: $OS"
+
+# Cập nhật và cài đặt các gói cần thiết
+log "Installing Tor and HAProxy..."
+if [ "$OS" == "ubuntu" ]; then
+    sudo apt update && sudo apt install tor haproxy ufw curl net-tools -y
+elif [ "$OS" == "centos" ]; then
+    sudo yum install epel-release -y
+    sudo yum install tor haproxy firewalld curl net-tools -y
+    sudo systemctl start firewalld
+    sudo systemctl enable firewalld
+fi
+
+# Cấu hình firewall mở các cổng cần thiết
+log "Configuring firewall..."
+if [ "$OS" == "ubuntu" ]; then
+    sudo ufw allow 9050/tcp
+    sudo ufw allow 1234/tcp
+    sudo ufw allow 3128/tcp
+    sudo ufw allow 6789/tcp
+    sudo ufw allow 20000:21000/tcp
+    sudo ufw allow 4444/tcp
+    sudo ufw reload
+elif [ "$OS" == "centos" ]; then
+    sudo firewall-cmd --permanent --add-port=9050/tcp
+    sudo firewall-cmd --permanent --add-port=1234/tcp
+    sudo firewall-cmd --permanent --add-port=3128/tcp
+    sudo firewall-cmd --permanent --add-port=6789/tcp
+    sudo firewall-cmd --permanent --add-port=20000-21000/tcp
+    sudo firewall-cmd --permanent --add-port=4444/tcp
+    sudo firewall-cmd --reload
+fi
+
+# Cài đặt cấu hình cho Tor
+log "Downloading new Tor configuration..."
+sudo rm -f /etc/tor/torrc
+sudo curl -o /etc/tor/torrc https://raw.githubusercontent.com/volamtuan/-/refs/heads/main/torrc
+
+# Khởi động lại dịch vụ Tor
+log "Restarting Tor service..."
+sudo systemctl restart tor
+sudo systemctl enable tor
+
+# Cài đặt cấu hình cho HAProxy
+log "Downloading new HAProxy configuration..."
+sudo rm -f /etc/haproxy/haproxy.cfg
+sudo curl -o /etc/haproxy/haproxy.cfg https://raw.githubusercontent.com/volamtuan/-/refs/heads/main/haproxy.cfg
+
+# Kiểm tra cấu hình HAProxy
+log "Checking HAProxy configuration..."
+haproxy -c -f /etc/haproxy/haproxy.cfg
+if [ $? -ne 0 ]; then
+    log "HAProxy configuration is invalid. Exiting..."
+    exit 1
+fi
+
+# Khởi động lại dịch vụ HAProxy
+log "Restarting HAProxy service..."
+sudo systemctl restart haproxy
+sudo systemctl enable haproxy
+
+log "Installation and configuration completed successfully!"
+
+# Kiểm tra trạng thái của các cổng đang mở
+log "Displaying open ports..."
+netstat -tuln
+
+# Tạo tệp checkip.txt để lưu kết quả kiểm tra proxy
+touch checkip.txt
+
+# Vòng lặp kiểm tra các cổng proxy và IP qua Tor
+for port in 9050 1234 3128 6789 {20000..21000}; do
+  echo "Đang Check Proxy Cổng: $port:" | tee -a checkip.txt
+  ip=$(curl --proxy socks5h://127.0.0.1:$port https://ifconfig.me 2>/dev/null)
+  echo "IP: $ip" | tee -a checkip.txt
+  if [ -n "$ip" ]; then
+    country=$(curl -s https://ipinfo.io/${ip}/country)
+    echo "Quốc Gia: $country" | tee -a checkip.txt
+  else
+    echo "Failed to get IP for port $port" | tee -a checkip.txt
+  fi
+  
+  echo -e "\n" | tee -a checkip.txt
+  sleep 1
+done
