@@ -29,7 +29,6 @@ cd 3proxy
 make -f Makefile.Linux
 sudo make install
 mkdir -p /usr/local/etc/3proxy/{bin,logs,stat}
-cp src/3proxy /usr/local/etc/3proxy/bin/
 # Cấu hình hệ thống cho tối ưu hóa số lượng kết nối mở
 echo "* hard nofile 999999" >> /etc/security/limits.conf
 echo "* soft nofile 999999" >> /etc/security/limits.conf
