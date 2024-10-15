@@ -16,15 +16,15 @@
 ## configure one below. Set "SocksPort 0" if you plan to run Tor only
 ## as a relay, and not make any local application connections yourself.
 #SocksPort 9050 # Default: Bind to localhost:9050 for local connections.
-#SocksPort 192.168.0.1:9100 # Bind to this address:port too.
+SocksPort 192.168.0.1:9100 # Bind to this address:port too.
 
 ## Entry policies to allow/deny SOCKS requests based on IP address.
 ## First entry that matches wins. If no SocksPolicy is set, we accept
 ## all (and only) requests that reach a SocksPort. Untrusted users who
 ## can access your SocksPort may be able to learn about the connections
 ## you make.
-#SocksPolicy accept 192.168.0.0/16
-#SocksPolicy reject *
+SocksPolicy accept 192.168.0.0/16
+SocksPolicy reject *
 
 ## Logs go to stdout at level "notice" unless redirected by something
 ## else, like one of the below lines. You can have as many Log lines as
@@ -34,7 +34,7 @@
 ## may provide sensitive information to an attacker who obtains the logs.
 ##
 ## Send all messages of level 'notice' or higher to /var/log/tor/notices.log
-#Log notice file /var/log/tor/notices.log
+Log notice file /var/log/tor/notices.log
 ## Send every possible message to /var/log/tor/debug.log
 #Log debug file /var/log/tor/debug.log
 ## Use the system log instead of Tor's logfiles
@@ -45,11 +45,11 @@
 ## Uncomment this to start the process in the background... or use
 ## --runasdaemon 1 on the command line. This is ignored on Windows;
 ## see the FAQ entry if you want Tor to run as an NT service.
-#RunAsDaemon 1
+RunAsDaemon 1
 
 ## The directory for keeping all the keys/etc. By default, we store
 ## things in $HOME/.tor on Unix, and in Application Data\tor on Windows.
-#DataDirectory /var/lib/tor
+DataDirectory /var/lib/tor
 
 ## The port on which Tor will listen for local connections from Tor
 ## controller applications, as documented in control-spec.txt.
@@ -68,12 +68,12 @@ CookieAuthentication 1
 ## HiddenServicePort x y:z says to redirect requests on port x to the
 ## address y:z.
 
-#HiddenServiceDir /var/lib/tor/hidden_service/
-#HiddenServicePort 80 127.0.0.1:80
+HiddenServiceDir /var/lib/tor/hidden_service/
+HiddenServicePort 80 127.0.0.1:80
 
-#HiddenServiceDir /var/lib/tor/other_hidden_service/
-#HiddenServicePort 80 127.0.0.1:80
-#HiddenServicePort 22 127.0.0.1:22
+HiddenServiceDir /var/lib/tor/other_hidden_service/
+HiddenServicePort 80 127.0.0.1:80
+HiddenServicePort 22 127.0.0.1:22
 
 ################ This section is just for relays #####################
 #
@@ -85,7 +85,7 @@ CookieAuthentication 1
 ## ORPort (e.g. to advertise 443 but bind to 9090), you can do it as
 ## follows.  You'll need to do ipchains or other port forwarding
 ## yourself to make this work.
-#ORPort 443 NoListen
+ORPort 443 NoListen
 #ORPort 127.0.0.1:9090 NoAdvertise
 
 ## The IP address or full DNS name for incoming connections to your
@@ -137,7 +137,7 @@ AccountingMax 4 GB
 ## follows.  below too. You'll need to do ipchains or other port
 ## forwarding yourself to make this work.
 #DirPort 80 NoListen
-#DirPort 127.0.0.1:9091 NoAdvertise
+DirPort 127.0.0.1:9091 NoAdvertise
 ## Uncomment to return an arbitrary blob of html on your DirPort. Now you
 ## can explain what Tor is if anybody wonders why your IP address is
 ## contacting them. See contrib/tor-exit-notice.html in Tor's source
@@ -156,7 +156,7 @@ AccountingMax 4 GB
 ## A comma-separated list of exit policies. They're considered first
 ## to last, and the first match wins. If you want to _replace_
 ## the default exit policy, end this with either a reject *:* or an
-## accept *:*. Otherwise, you're _augmenting_ (prepending to) the
+accept *:*. Otherwise, you're _augmenting_ (prepending to) the
 ## default exit policy. Leave commented to just use the default, which is
 ## described in the man page or at
 ## https://www.torproject.org/documentation.html
@@ -174,8 +174,10 @@ AccountingMax 4 GB
 ##
 #ExitPolicy accept *:6660-6667,reject *:* # allow irc ports but no more
 #ExitPolicy accept *:119 # accept nntp as well as default exit policy
-#ExitPolicy reject *:* # no exits allowed
-
+#
+ExitPolicy reject *:* # no exits allowed
+BandwidthRate 100 KB
+BandwidthBurst 200 KB
 ## Bridge relays (or "bridges") are Tor relays that aren't listed in the
 ## main directory. Since there is no complete public list of them, even an
 ## ISP that filters connections to all the known Tor relays probably
